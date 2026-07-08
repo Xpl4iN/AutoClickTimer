@@ -168,7 +168,7 @@ class App(ctk.CTk):
         self._apply_layout(self.winfo_width() < 640)
 
     def _on_resize(self, event):
-        if event.widget != self:
+        if str(event.widget) != str(self):
             return
         is_slim = event.width < 640
         if self._is_slim_layout != is_slim:
