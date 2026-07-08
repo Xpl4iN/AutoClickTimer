@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from typing import List
 
 import customtkinter as ctk
@@ -22,13 +23,14 @@ from app.models import Item
 from app.ui.form_panel import FormPanel
 from app.ui.log_panel import LogPanel
 from app.ui.queue_panel import QueuePanel
-from app.ui.theme import BG_COLOR, ON_SURF, ON_SURF_M, ERROR, FONT_TITLE, FONT_SMALL
+from app.ui.theme import BG_COLOR, ON_SURF, ON_SURF_M, ERROR, WARNING, FONT_TITLE, FONT_SMALL, FONT_BOLD
+from app.version import VERSION, REPO
 
 
 class AppWindow(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("AutoClick Timer")
+        self.title(f"AutoClick Timer  v{VERSION}")
         self.geometry("940x720")
         self.minsize(380, 620)
         self.configure(fg_color=BG_COLOR)
@@ -38,6 +40,7 @@ class AppWindow(ctk.CTk):
         # ---- App state ----
         self._queue: List[Item] = []
         self._alive = True   # set to False in _on_close; guards safe() callbacks
+        self._update_info = None
 
         # ---- Build executor (no queue yet) ----
         self._executor = QueueExecutor(self._make_callbacks())
@@ -50,6 +53,8 @@ class AppWindow(ctk.CTk):
         self.bind("<Configure>", self._on_resize)
         self._is_slim = False
         self.after(150, self._init_layout)
+        # Check for updates 3 s after startup so it doesn't delay first paint
+        self.after(3000, self._start_update_check)
 
     # ------------------------------------------------------------------
     # Layout
@@ -66,11 +71,23 @@ class AppWindow(ctk.CTk):
         self._hdr.grid(row=0, column=0, columnspan=2, sticky="ew", padx=24, pady=(18, 6))
         self._hdr.grid_columnconfigure(0, weight=0)
         self._hdr.grid_columnconfigure(1, weight=1)
+        self._hdr.grid_columnconfigure(2, weight=0)  # update button column
 
         self._title_lbl = ctk.CTkLabel(
-            self._hdr, text="AutoClick Timer", font=FONT_TITLE, text_color=ON_SURF
+            self._hdr, text=f"AutoClick Timer  v{VERSION}", font=FONT_TITLE, text_color=ON_SURF
         )
         self._title_lbl.grid(row=0, column=0, sticky="w")
+
+        # Update button -- hidden until a newer version is detected
+        self._update_btn = ctk.CTkButton(
+            self._hdr, text="",
+            fg_color=WARNING, hover_color="#d97706",
+            text_color="#1a1a1a", font=FONT_BOLD,
+            corner_radius=8, width=120,
+            command=self._on_update_click,
+        )
+        self._update_btn.grid(row=0, column=2, padx=(12, 0))
+        self._update_btn.grid_remove()   # hidden until update found
 
         self._failsafe_lbl = ctk.CTkLabel(
             self._hdr,
@@ -256,8 +273,54 @@ class AppWindow(ctk.CTk):
         self._log.append("Warteschlange geleert.")
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Auto-update
     # ------------------------------------------------------------------
+
+    def _start_update_check(self) -> None:
+        """Launch a background thread to query the GitHub API for a new release."""
+        threading.Thread(target=self._bg_check_update, daemon=True).start()
+
+    def _bg_check_update(self) -> None:
+        """Runs in a daemon thread -- no UI access allowed here."""
+        from app.updater import UpdateChecker
+        info = UpdateChecker(REPO, VERSION).check()
+        if info is not None and self._alive:
+            try:
+                self.after(0, lambda: self._show_update_available(info))
+            except Exception:
+                pass
+
+    def _show_update_available(self, info) -> None:
+        """Called on the Tk main thread when a newer release is found."""
+        self._update_info = info
+        self._update_btn.configure(text=f"Update {info.tag} \u2193")
+        self._update_btn.grid()   # make visible
+        self._log.append(
+            f"Neue Version verfuegbar: {info.tag}  "
+            f"-- Klick auf 'Update {info.tag}' zum Aktualisieren."
+        )
+
+    def _on_update_click(self) -> None:
+        """User clicked the update button -- download and restart."""
+        if not self._update_info:
+            return
+        info = self._update_info
+        self._update_btn.configure(state="disabled", text="Wird geladen...")
+        self._log.append(f"Update auf {info.tag} wird gestartet...")
+
+        def safe_log(msg: str) -> None:
+            if self._alive:
+                try:
+                    self.after(0, lambda m=msg: self._log.append(m))
+                except Exception:
+                    pass
+
+        def do_update() -> None:
+            from app.updater import UpdateChecker
+            UpdateChecker(REPO, VERSION).download_and_apply(info, safe_log)
+
+        threading.Thread(target=do_update, daemon=True).start()
+
 
     def _load_icon(self) -> None:
         icon_name = "image.ico"
