@@ -69,6 +69,7 @@ class QueuePanel:
         self._on_remove  = on_remove
         self._is_running = is_running
         self._rows: List[_RowRef] = []
+        self._rendering = False
 
         self._build_queue_area(parent)
         self._build_controls(parent, on_start, on_stop, on_reset, on_clear)
@@ -79,39 +80,49 @@ class QueuePanel:
 
     def render(self, queue: List[Item]) -> None:
         """Full re-render of all queue rows. Call on structural changes."""
-        # pack_forget() before destroy() is required for CTkScrollableFrame:
-        # destroy() removes the widget from Tk's tree but the canvas backing
-        # the scrollable frame does not automatically repaint. pack_forget()
-        # removes the widget from the layout pass, and update_idletasks()
-        # forces the canvas to flush its pending draw queue.
-        for ref in self._rows:
-            try:
-                ref[1].pack_forget()
-                ref[1].destroy()
-            except Exception:
-                pass
-        self._rows.clear()
-        self._scroll.update_idletasks()   # flush canvas redraws
-
-        if not queue:
-            self._empty_lbl.pack(pady=32)
+        if self._rendering:
             return
-        self._empty_lbl.pack_forget()
+        self._rendering = True
+        try:
+            # pack_forget() before destroy() is required for CTkScrollableFrame:
+            # destroy() removes the widget from Tk's tree but the canvas backing
+            # the scrollable frame does not automatically repaint. pack_forget()
+            # removes the widget from the layout pass, and update_idletasks()
+            # forces the canvas to flush its pending draw queue.
+            for ref in self._rows:
+                try:
+                    ref[1].pack_forget()
+                    ref[1].destroy()
+                except Exception:
+                    pass
+            self._rows.clear()
+            self._scroll.update_idletasks()   # flush canvas redraws
 
-        for i, item in enumerate(queue):
-            self._rows.append(self._build_row(item, i))
+            if not queue:
+                self._empty_lbl.pack(pady=32)
+                return
+            self._empty_lbl.pack_forget()
+
+            for i, item in enumerate(queue):
+                self._rows.append(self._build_row(item, i))
+        finally:
+            self._rendering = False
 
     def update_row(self, item: Item) -> None:
         """Lightweight update -- refreshes countdown, progress, and status for one row."""
         for ref in self._rows:
             if ref[0] is item:
-                _, _, countdown_lbl, prog_bar, status_lbl = ref
-                status_text, cd_text, cd_color = _phase_display(item)
-                countdown_lbl.configure(text=cd_text, text_color=cd_color)
-                prog_bar.set(_phase_progress(item))
-                prog_color = SUCCESS if item.status == "done" else PRIMARY
-                prog_bar.configure(progress_color=prog_color)
-                status_lbl.configure(text=status_text)
+                _, row_frame, countdown_lbl, prog_bar, status_lbl = ref
+                try:
+                    if row_frame.winfo_exists():
+                        status_text, cd_text, cd_color = _phase_display(item)
+                        countdown_lbl.configure(text=cd_text, text_color=cd_color)
+                        prog_bar.set(_phase_progress(item))
+                        prog_color = SUCCESS if item.status == "done" else PRIMARY
+                        prog_bar.configure(progress_color=prog_color)
+                        status_lbl.configure(text=status_text)
+                except Exception:
+                    pass
                 break
 
     def set_status(self, msg: str) -> None:

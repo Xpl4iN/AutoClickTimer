@@ -249,7 +249,6 @@ class AppWindow(ctk.CTk):
         self._queue_panel.set_controls_enabled(running=True)
         self._log.append("Warteschlange gestartet.")
         self._executor.start(self._queue)
-        self._queue_panel.render(self._queue)
 
     def _on_stop(self) -> None:
         self._executor.stop()
