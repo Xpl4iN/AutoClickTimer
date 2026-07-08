@@ -128,100 +128,113 @@ class App(ctk.CTk):
         self.bind("<Configure>", self._on_resize)
 
     def _build_ui(self):
-        # Configure main window grid
+        # Main grid: row 0 = header, row 1 = panels
+        self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=0) # Left panel fixed by default
-        self.grid_columnconfigure(1, weight=1) # Right panel expands by default
-        
-        # Header (spans both columns)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+
+        # Header
         self.hdr = ctk.CTkFrame(self, fg_color="transparent")
         self.hdr.grid(row=0, column=0, columnspan=2, sticky="ew", padx=24, pady=(18, 6))
-        self.hdr.grid_columnconfigure(0, weight=1)
-        
+        self.hdr.grid_columnconfigure(0, weight=0)
+        self.hdr.grid_columnconfigure(1, weight=1)
+
         self.title_lbl = ctk.CTkLabel(self.hdr, text="AutoClick Timer", font=("Segoe UI", 20, "bold"), text_color=ON_SURF)
         self.title_lbl.grid(row=0, column=0, sticky="w")
-        
-        self.failsafe_lbl = ctk.CTkLabel(self.hdr, text="Notfall-Stop: Maus ganz oben-links in die Bildschirmecke schieben", font=("Segoe UI", 10, "bold"), text_color=ERROR)
+
+        self.failsafe_lbl = ctk.CTkLabel(self.hdr, text="Notfall-Stop: Maus ganz oben-links in die Bildschirmecke schieben",
+                                         font=("Segoe UI", 10, "bold"), text_color=ERROR, wraplength=400, justify="right")
         self.failsafe_lbl.grid(row=0, column=1, sticky="e")
-        
+
         # Left Panel (Form + Presets + Log)
         self.left_panel = ctk.CTkFrame(self, fg_color="transparent")
         self.left_panel.grid(row=1, column=0, sticky="nsew", padx=(20, 10), pady=(10, 16))
         self.left_panel.grid_columnconfigure(0, weight=1)
-        self.left_panel.grid_rowconfigure(2, weight=1) # Log expands (row 2)
-        
+        # row 0 = form card (fixed), row 1 = presets card (fixed), row 2 = log (expands)
+        self.left_panel.grid_rowconfigure(0, weight=0)
+        self.left_panel.grid_rowconfigure(1, weight=0)
+        self.left_panel.grid_rowconfigure(2, weight=1)
+
         self._build_form(self.left_panel)
         self._build_presets(self.left_panel)
         self._build_log(self.left_panel)
-        
+
         # Right Panel (Queue + Controls)
         self.right_panel = ctk.CTkFrame(self, fg_color="transparent")
         self.right_panel.grid(row=1, column=1, sticky="nsew", padx=(10, 20), pady=(10, 16))
         self.right_panel.grid_columnconfigure(0, weight=1)
-        self.right_panel.grid_rowconfigure(0, weight=1) # Queue expands
-        
+        # row 0 = queue label+scrollable (expands), row 1 = controls (fixed)
+        self.right_panel.grid_rowconfigure(0, weight=1)
+        self.right_panel.grid_rowconfigure(1, weight=0)
+
         self._build_queue_area(self.right_panel)
         self._build_controls(self.right_panel)
-        
-        # Initial layout apply based on window size
+
+        # Initial layout
         self.update_idletasks()
-        self._apply_layout(self.winfo_width() < 640)
+        self._apply_layout(self.winfo_width() < 720)
 
     def _on_resize(self, event):
         if str(event.widget) != str(self):
             return
-        is_slim = event.width < 640
+        is_slim = event.width < 720
         if self._is_slim_layout != is_slim:
             self._is_slim_layout = is_slim
             self._apply_layout(is_slim)
 
     def _apply_layout(self, is_slim):
         if is_slim:
-            # Slim layout: vertical stack
-            self.grid_rowconfigure(1, weight=1)
-            self.grid_rowconfigure(2, weight=1) # Row 2 for right panel
+            # Slim: single column, panels stacked vertically
+            # Row 1 = left panel (fixed height, all content), Row 2 = right panel (expands for queue)
+            self.grid_rowconfigure(1, weight=0)  # left panel does not expand
+            self.grid_rowconfigure(2, weight=1)  # right panel (queue) expands
             self.grid_columnconfigure(0, weight=1, minsize=0)
             self.grid_columnconfigure(1, weight=0, minsize=0)
-            
+
             self.hdr.grid_configure(columnspan=1)
             self.title_lbl.grid_configure(row=0, column=0, sticky="w")
-            self.failsafe_lbl.grid_configure(row=1, column=0, sticky="w", pady=(4, 0))
-            
-            self.left_panel.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=20, pady=(10, 8))
-            self.right_panel.grid_configure(row=2, column=0, columnspan=1, sticky="nsew", padx=20, pady=(8, 16))
-            
-            # Slim controls: 2x2 grid
+            self.failsafe_lbl.grid_configure(row=1, column=0, sticky="w", pady=(2, 0))
+
+            self.left_panel.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=16, pady=(10, 6))
+            self.right_panel.grid_configure(row=2, column=0, columnspan=1, sticky="nsew", padx=16, pady=(6, 16))
+
+            # In slim mode, log in left panel should NOT expand (just show label)
+            self.left_panel.grid_rowconfigure(2, weight=0)
+
+            # Controls: 2x2 grid
             self._start_btn.grid_configure(row=0, column=0, padx=2, pady=2, sticky="ew")
             self._stop_btn.grid_configure(row=0, column=1, padx=2, pady=2, sticky="ew")
             self._reset_btn.grid_configure(row=1, column=0, padx=2, pady=2, sticky="ew")
             self._clear_btn.grid_configure(row=1, column=1, padx=2, pady=2, sticky="ew")
             self._stat.grid_configure(row=2, column=0, columnspan=2, pady=(4, 0), sticky="w")
-            
             self.controls_bar.grid_columnconfigure((0, 1), weight=1)
             self.controls_bar.grid_columnconfigure((2, 3, 4), weight=0)
         else:
-            # Wide layout: side-by-side split
+            # Wide: two columns side by side, both expand equally
             self.grid_rowconfigure(1, weight=1)
             self.grid_rowconfigure(2, weight=0)
-            self.grid_columnconfigure(0, weight=0, minsize=380) # Left panel fixed width of 380px
-            self.grid_columnconfigure(1, weight=1, minsize=0) # Right panel expands
-            
+            self.grid_columnconfigure(0, weight=1, minsize=360)
+            self.grid_columnconfigure(1, weight=1, minsize=280)
+
             self.hdr.grid_configure(columnspan=2)
             self.title_lbl.grid_configure(row=0, column=0, sticky="w")
             self.failsafe_lbl.grid_configure(row=0, column=1, sticky="e", pady=0)
-            
+
             self.left_panel.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=(20, 10), pady=(10, 16))
             self.right_panel.grid_configure(row=1, column=1, columnspan=1, sticky="nsew", padx=(10, 20), pady=(10, 16))
-            
-            # Wide controls: horizontal row
-            self._start_btn.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="w")
-            self._stop_btn.grid_configure(row=0, column=1, padx=(0, 8), pady=0, sticky="w")
-            self._reset_btn.grid_configure(row=0, column=2, padx=(0, 8), pady=0, sticky="w")
-            self._clear_btn.grid_configure(row=0, column=3, padx=0, pady=0, sticky="w")
-            self._stat.grid_configure(row=0, column=4, padx=0, pady=0, sticky="e")
-            
-            self.controls_bar.grid_columnconfigure((0, 1, 2, 3), weight=0)
-            self.controls_bar.grid_columnconfigure(4, weight=1)
+
+            # In wide mode, log in left panel expands to fill remaining space
+            self.left_panel.grid_rowconfigure(2, weight=1)
+
+            # Controls: horizontal row
+            self._start_btn.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="ew")
+            self._stop_btn.grid_configure(row=0, column=1, padx=(0, 8), pady=0, sticky="ew")
+            self._reset_btn.grid_configure(row=0, column=2, padx=(0, 8), pady=0, sticky="ew")
+            self._clear_btn.grid_configure(row=0, column=3, padx=0, pady=0, sticky="ew")
+            self._stat.grid_configure(row=0, column=4, padx=(8, 0), pady=0, sticky="e")
+            self.controls_bar.grid_columnconfigure((0, 1, 2, 3), weight=1)
+            self.controls_bar.grid_columnconfigure(4, weight=0)
 
     def _build_form(self, parent):
         card = ctk.CTkFrame(parent, fg_color=SURFACE, border_width=1, border_color=OUTLINE, corner_radius=12)
@@ -442,15 +455,17 @@ class App(ctk.CTk):
 
     def _build_queue_area(self, parent):
         outer = ctk.CTkFrame(parent, fg_color="transparent")
-        outer.grid(row=0, column=0, sticky="nsew", pady=(0, 12))
+        outer.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
+        outer.grid_rowconfigure(0, weight=0)
         outer.grid_rowconfigure(1, weight=1)
         outer.grid_columnconfigure(0, weight=1)
-        
+
         ctk.CTkLabel(outer, text="WARTESCHLANGE", font=("Segoe UI", 10, "bold"), text_color=ON_SURF_M).grid(row=0, column=0, sticky="w", pady=(0, 4))
-        
+
         self.queue_frame = ctk.CTkScrollableFrame(outer, fg_color=SURFACE, border_width=1, border_color=OUTLINE, corner_radius=12)
         self.queue_frame.grid(row=1, column=0, sticky="nsew")
-        
+        self.queue_frame.grid_columnconfigure(0, weight=1)
+
         self._empty = ctk.CTkLabel(self.queue_frame, text="Noch keine Aktionen — füge deine erste oben hinzu.", font=("Segoe UI", 11), text_color=ON_SURF_M)
         self._empty.pack(pady=32)
 
@@ -478,11 +493,13 @@ class App(ctk.CTk):
         lf = ctk.CTkFrame(parent, fg_color="transparent")
         lf.grid(row=2, column=0, sticky="nsew", pady=(0, 0))
         lf.grid_columnconfigure(0, weight=1)
-        lf.grid_rowconfigure(1, weight=1) # Log expands
-        
+        lf.grid_rowconfigure(0, weight=0)
+        lf.grid_rowconfigure(1, weight=1)  # Textbox expands to fill available space
+
         ctk.CTkLabel(lf, text="LOG", font=("Segoe UI", 10, "bold"), text_color=ON_SURF_M).grid(row=0, column=0, sticky="w", pady=(0, 4))
-        
-        self._log = ctk.CTkTextbox(lf, fg_color=SURFACE, border_width=1, border_color=OUTLINE, font=("Consolas", 9), text_color=ON_SURF_M)
+
+        self._log = ctk.CTkTextbox(lf, fg_color=SURFACE, border_width=1, border_color=OUTLINE,
+                                   font=("Consolas", 9), text_color=ON_SURF_M, height=120)
         self._log.grid(row=1, column=0, sticky="nsew")
         self._log.configure(state="disabled")
 
