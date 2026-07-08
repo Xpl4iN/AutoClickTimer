@@ -79,7 +79,7 @@ class App(ctk.CTk):
         super().__init__()
         self.title("AutoClick Timer")
         self.geometry("940x720")
-        self.minsize(380, 560)
+        self.minsize(380, 620)
         
         self.configure(fg_color=BG_COLOR)
         
@@ -470,7 +470,10 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(outer, text="WARTESCHLANGE", font=("Segoe UI", 10, "bold"), text_color=ON_SURF_M).grid(row=0, column=0, sticky="w", pady=(0, 4))
 
-        self.queue_frame = ctk.CTkScrollableFrame(outer, fg_color=SURFACE, border_width=1, border_color=OUTLINE, corner_radius=12)
+        self.queue_frame = ctk.CTkScrollableFrame(
+            outer, fg_color=SURFACE, border_width=1, border_color=OUTLINE,
+            corner_radius=12, height=48  # min ~1 row always visible
+        )
         self.queue_frame.grid(row=1, column=0, sticky="nsew")
         self.queue_frame.grid_columnconfigure(0, weight=1)
 
@@ -506,8 +509,10 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(lf, text="LOG", font=("Segoe UI", 10, "bold"), text_color=ON_SURF_M).grid(row=0, column=0, sticky="w", pady=(0, 4))
 
-        self._log = ctk.CTkTextbox(lf, fg_color=SURFACE, border_width=1, border_color=OUTLINE,
-                                   font=("Consolas", 9), text_color=ON_SURF_M, height=120)
+        self._log = ctk.CTkTextbox(
+            lf, fg_color=SURFACE, border_width=1, border_color=OUTLINE,
+            font=("Consolas", 9), text_color=ON_SURF_M, height=36  # min ~1 line always visible
+        )
         self._log.grid(row=1, column=0, sticky="nsew")
         self._log.configure(state="disabled")
 
