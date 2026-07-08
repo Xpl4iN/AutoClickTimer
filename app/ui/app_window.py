@@ -279,6 +279,11 @@ class AppWindow(ctk.CTk):
                 break
 
     def _on_close(self) -> None:
-        self._alive = False       # stop any further after() posts from the executor
-        self._executor.stop()     # signal thread to exit at next checkpoint
-        self.destroy()            # close the window and exit mainloop
+        self._alive = False       # stop executor callbacks from posting to after()
+        self._executor.stop()     # signal worker thread to exit
+        self.withdraw()           # hide the window immediately (feels instant)
+        # CustomTkinter spawns a non-daemon darkdetect thread that blocks
+        # normal Python shutdown. os._exit(0) terminates the process directly,
+        # bypassing thread join -- safe for a GUI utility with no open files.
+        import os
+        os._exit(0)

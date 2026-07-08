@@ -79,12 +79,19 @@ class QueuePanel:
 
     def render(self, queue: List[Item]) -> None:
         """Full re-render of all queue rows. Call on structural changes."""
-        # Destroy only the row frames WE created.
-        # Do NOT use self._scroll.winfo_children() -- CTkScrollableFrame's
-        # direct children are its internal canvas/scrollbar widgets, not our rows.
+        # pack_forget() before destroy() is required for CTkScrollableFrame:
+        # destroy() removes the widget from Tk's tree but the canvas backing
+        # the scrollable frame does not automatically repaint. pack_forget()
+        # removes the widget from the layout pass, and update_idletasks()
+        # forces the canvas to flush its pending draw queue.
         for ref in self._rows:
-            ref[1].destroy()   # ref[1] is the row CTkFrame
+            try:
+                ref[1].pack_forget()
+                ref[1].destroy()
+            except Exception:
+                pass
         self._rows.clear()
+        self._scroll.update_idletasks()   # flush canvas redraws
 
         if not queue:
             self._empty_lbl.pack(pady=32)
