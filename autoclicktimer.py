@@ -171,24 +171,32 @@ class App(ctk.CTk):
         self._build_queue_area(self.right_panel)
         self._build_controls(self.right_panel)
 
-        # Initial layout
+        # Defer initial layout until window is fully rendered and has a real width
+        self.after(150, self._detect_and_apply_initial_layout)
+
+    def _detect_and_apply_initial_layout(self):
+        """Called after window renders so winfo_width() returns the real pixel width."""
         self.update_idletasks()
-        self._apply_layout(self.winfo_width() < 720)
+        is_slim = self.winfo_width() < 720
+        self._is_slim_layout = is_slim
+        self._apply_layout(is_slim)
 
     def _on_resize(self, event):
         if str(event.widget) != str(self):
             return
         is_slim = event.width < 720
         if self._is_slim_layout != is_slim:
-            self._is_slim_layout = is_slim
             self._apply_layout(is_slim)
 
     def _apply_layout(self, is_slim):
+        # Always sync state so _on_resize comparisons stay accurate
+        self._is_slim_layout = is_slim
+
         if is_slim:
             # Slim: single column, panels stacked vertically
-            # Row 1 = left panel (fixed height, all content), Row 2 = right panel (expands for queue)
-            self.grid_rowconfigure(1, weight=0)  # left panel does not expand
-            self.grid_rowconfigure(2, weight=1)  # right panel (queue) expands
+            # Row 1 = left panel (fixed height), Row 2 = right panel (queue expands)
+            self.grid_rowconfigure(1, weight=0)
+            self.grid_rowconfigure(2, weight=1)
             self.grid_columnconfigure(0, weight=1, minsize=0)
             self.grid_columnconfigure(1, weight=0, minsize=0)
 
@@ -199,7 +207,7 @@ class App(ctk.CTk):
             self.left_panel.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=16, pady=(10, 6))
             self.right_panel.grid_configure(row=2, column=0, columnspan=1, sticky="nsew", padx=16, pady=(6, 16))
 
-            # In slim mode, log in left panel should NOT expand (just show label)
+            # In slim mode, log does not expand (no vertical space to give it)
             self.left_panel.grid_rowconfigure(2, weight=0)
 
             # Controls: 2x2 grid
@@ -224,10 +232,10 @@ class App(ctk.CTk):
             self.left_panel.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=(20, 10), pady=(10, 16))
             self.right_panel.grid_configure(row=1, column=1, columnspan=1, sticky="nsew", padx=(10, 20), pady=(10, 16))
 
-            # In wide mode, log in left panel expands to fill remaining space
+            # In wide mode, log expands to fill remaining left-panel height
             self.left_panel.grid_rowconfigure(2, weight=1)
 
-            # Controls: horizontal row
+            # Controls: horizontal row, all buttons equal width
             self._start_btn.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="ew")
             self._stop_btn.grid_configure(row=0, column=1, padx=(0, 8), pady=0, sticky="ew")
             self._reset_btn.grid_configure(row=0, column=2, padx=(0, 8), pady=0, sticky="ew")
