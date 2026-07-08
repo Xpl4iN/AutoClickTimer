@@ -3,10 +3,9 @@
 import sys, subprocess, os, time, datetime, threading
 
 def ensure_deps():
-    for pkg in ["pyautogui", "pyperclip", "customtkinter", "Pillow"]:
-        mod = "customtkinter" if pkg == "customtkinter" else ("PIL" if pkg == "Pillow" else pkg)
+    for pkg in ["pyautogui", "pyperclip", "customtkinter"]:
         try:
-            __import__(mod)
+            __import__(pkg)
         except ImportError:
             subprocess.check_call([sys.executable, "-m", "pip", "install", pkg],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
