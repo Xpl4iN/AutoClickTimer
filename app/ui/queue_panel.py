@@ -271,7 +271,7 @@ class QueuePanel:
         # Progress bar
         prog_color = SUCCESS if is_done else PRIMARY
         prog = ctk.CTkProgressBar(
-            row, height=4, progress_color=prog_color, trough_color=SURFACE_H,
+            row, height=4, progress_color=prog_color, fg_color=SURFACE_H,
         )
         prog.set(_phase_progress(item))
         prog.grid(row=2, column=0, columnspan=4, sticky="ew", padx=10, pady=(0, 8))
