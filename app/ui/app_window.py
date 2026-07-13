@@ -142,7 +142,7 @@ class AppWindow(ctk.CTk):
 
     def _init_layout(self) -> None:
         self.update_idletasks()
-        is_slim = self.winfo_width() < 720
+        is_slim = self.winfo_width() < 780
         self._is_slim = is_slim
         self._apply_layout(is_slim)
 
@@ -150,7 +150,7 @@ class AppWindow(ctk.CTk):
         if str(event.widget) != str(self):
             return
         width = self.winfo_width()
-        is_slim = width < 720
+        is_slim = width < 780
         if is_slim != self._is_slim:
             self._is_slim = is_slim
             self._apply_layout(is_slim)

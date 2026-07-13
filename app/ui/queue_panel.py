@@ -336,13 +336,15 @@ class QueuePanel:
 
     def configure_wide(self) -> None:
         """Rearrange controls for wide (two-column) layout."""
-        self._start_btn.grid_configure(row=0, column=0, padx=(0, 4), pady=0, sticky="ew")
-        self._start_later_btn.grid_configure(row=0, column=1, padx=(0, 8), pady=0, sticky="ew")
-        self._stop_btn.grid_configure(row=0, column=2, padx=(0, 4), pady=0, sticky="ew")
-        self._reset_btn.grid_configure(row=0, column=3, padx=(0, 4), pady=0, sticky="ew")
-        self._clear_btn.grid_configure(row=0, column=4, padx=0, pady=0, sticky="ew")
-        self._stat.grid_configure(row=0, column=5, padx=(8, 0), pady=0, sticky="ew")
-        self._save_btn.grid_configure(row=0, column=6, padx=(8, 4), pady=0, sticky="ew")
-        self._load_btn.grid_configure(row=0, column=7, padx=0, pady=0, sticky="ew")
-        self._controls.grid_columnconfigure((0, 1, 2, 3, 4, 6, 7), weight=1)
-        self._controls.grid_columnconfigure(5, weight=1)
+        self._start_btn.grid_configure(row=0, column=0, padx=(0, 4), pady=(0, 6), sticky="ew")
+        self._start_later_btn.grid_configure(row=0, column=1, padx=(0, 4), pady=(0, 6), sticky="ew")
+        self._stop_btn.grid_configure(row=0, column=2, padx=(0, 4), pady=(0, 6), sticky="ew")
+        self._reset_btn.grid_configure(row=0, column=3, padx=(0, 4), pady=(0, 6), sticky="ew")
+        self._clear_btn.grid_configure(row=0, column=4, padx=0, pady=(0, 6), sticky="ew")
+        
+        self._save_btn.grid_configure(row=1, column=0, columnspan=2, padx=(0, 4), pady=0, sticky="ew")
+        self._load_btn.grid_configure(row=1, column=2, columnspan=2, padx=(0, 4), pady=0, sticky="ew")
+        self._stat.grid_configure(row=1, column=4, columnspan=4, padx=(8, 0), pady=0, sticky="w")
+        
+        self._controls.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+        self._controls.grid_columnconfigure((5, 6, 7), weight=0)
