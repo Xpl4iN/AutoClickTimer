@@ -300,6 +300,10 @@ class QueuePanel:
             )
             del_btn.configure(command=lambda it=item: self._on_remove(it))
             del_btn.grid(row=0, column=3, padx=10, pady=10)
+        else:
+            # Reserve space so the row width does not collapse and shift the layout
+            placeholder = ctk.CTkFrame(row, width=24, height=24, fg_color="transparent")
+            placeholder.grid(row=0, column=3, padx=10, pady=10)
 
         # Progress bar
         prog_color = SUCCESS if is_done else PRIMARY

@@ -210,6 +210,7 @@ class FormPanel:
         self._window_combo = ctk.CTkComboBox(
             tw_inner, variable=self._target_window, values=_get_open_windows(),
             fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF, font=FONT_BODY,
+            width=240,
         )
         self._window_combo.grid(row=0, column=0, sticky="ew", padx=(0, 8))
         

@@ -66,8 +66,8 @@ class AppWindow(ctk.CTk):
     def _build_layout(self) -> None:
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=0, minsize=380)
+        self.grid_columnconfigure(1, weight=1, minsize=340)
 
         # Header
         self._hdr = ctk.CTkFrame(self, fg_color="transparent")
@@ -149,7 +149,8 @@ class AppWindow(ctk.CTk):
     def _on_resize(self, event) -> None:
         if str(event.widget) != str(self):
             return
-        is_slim = event.width < 720
+        width = self.winfo_width()
+        is_slim = width < 720
         if is_slim != self._is_slim:
             self._is_slim = is_slim
             self._apply_layout(is_slim)
@@ -172,8 +173,8 @@ class AppWindow(ctk.CTk):
         else:
             self.grid_rowconfigure(1, weight=1)
             self.grid_rowconfigure(2, weight=0)
-            self.grid_columnconfigure(0, weight=1, minsize=360)
-            self.grid_columnconfigure(1, weight=1, minsize=280)
+            self.grid_columnconfigure(0, weight=0, minsize=380)
+            self.grid_columnconfigure(1, weight=1, minsize=340)
 
             self._hdr.grid_configure(columnspan=2)
             self._title_lbl.grid_configure(row=0, column=0, sticky="w")
