@@ -142,7 +142,7 @@ class AppWindow(ctk.CTk):
 
     def _init_layout(self) -> None:
         self.update_idletasks()
-        is_slim = self.winfo_width() < 780
+        is_slim = self.winfo_width() < 890
         self._is_slim = is_slim
         self._apply_layout(is_slim)
 
@@ -150,7 +150,7 @@ class AppWindow(ctk.CTk):
         if str(event.widget) != str(self):
             return
         width = self.winfo_width()
-        is_slim = width < 780
+        is_slim = width < 890
         if is_slim != self._is_slim:
             self._is_slim = is_slim
             self._apply_layout(is_slim)
@@ -166,8 +166,8 @@ class AppWindow(ctk.CTk):
             self._title_lbl.grid_configure(row=0, column=0, sticky="w")
             self._failsafe_lbl.grid_configure(row=1, column=0, sticky="w", pady=(2, 0))
 
-            self._left.grid_configure(row=1, column=0, columnspan=1, padx=16, pady=(10, 6))
-            self._right.grid_configure(row=2, column=0, columnspan=1, padx=16, pady=(6, 16))
+            self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=16, pady=(10, 6))
+            self._right.grid_configure(row=2, column=0, columnspan=1, sticky="nsew", padx=16, pady=(6, 16))
             self._left.grid_rowconfigure(2, weight=0)
             self._queue_panel.configure_slim()
         else:
@@ -180,8 +180,8 @@ class AppWindow(ctk.CTk):
             self._title_lbl.grid_configure(row=0, column=0, sticky="w")
             self._failsafe_lbl.grid_configure(row=0, column=1, sticky="e", pady=0)
 
-            self._left.grid_configure(row=1, column=0, columnspan=1, padx=(20, 10), pady=(10, 16))
-            self._right.grid_configure(row=1, column=1, columnspan=1, padx=(10, 20), pady=(10, 16))
+            self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=(20, 10), pady=(10, 16))
+            self._right.grid_configure(row=1, column=1, columnspan=1, sticky="nsew", padx=(10, 20), pady=(10, 16))
             self._left.grid_rowconfigure(2, weight=1)
             self._queue_panel.configure_wide()
 

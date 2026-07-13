@@ -128,21 +128,20 @@ class FormPanel:
         # ---- Action selector ----
         af = ctk.CTkFrame(card, fg_color="transparent")
         af.grid(row=2, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
+        af.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(af, text="Aktion", font=FONT_SMALL, text_color=ON_SURF_M).pack(
-            anchor="w", pady=(0, 4)
+        ctk.CTkLabel(af, text="Aktion:", font=FONT_SMALL, text_color=ON_SURF_M).grid(
+            row=0, column=0, sticky="w", padx=(0, 10)
         )
-        self._act_seg = ctk.CTkSegmentedButton(
+        self._act_combo = ctk.CTkComboBox(
             af,
             values=["Enter", "Linksklick", "Prompt senden", "Sleep & Wake", "Herunterfahren"],
             command=self._on_action_change,
-            fg_color=SURFACE_L, selected_color=PRIMARY,
-            selected_hover_color=PRIMARY_HOV,
-            text_color=ON_SURF, unselected_color=SURFACE_L,
-            unselected_hover_color=SURFACE_H, font=FONT_BODY,
+            fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
+            font=FONT_BODY, width=240,
         )
-        self._act_seg.pack(fill="x")
-        self._act_seg.set("Enter")
+        self._act_combo.grid(row=0, column=1, sticky="w")
+        self._act_combo.set("Enter")
 
         # ---- Prompt text area (hidden unless "Prompt senden") ----
         self._prompt_frame = ctk.CTkFrame(card, fg_color="transparent")
@@ -165,32 +164,32 @@ class FormPanel:
         # ---- Sleep config inputs (hidden unless "Sleep & Wake") ----
         self._sleep_frame = ctk.CTkFrame(card, fg_color="transparent")
         self._sleep_frame.grid(row=4, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
-        self._sleep_frame.grid_columnconfigure((1, 3), weight=1)
+        self._sleep_frame.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(
             self._sleep_frame, text="Sleep-Konfiguration",
             font=FONT_LABEL, text_color=ON_SURF_M,
-        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 6))
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
         ctk.CTkLabel(
             self._sleep_frame, text="Wartezeit vor Schlaf (Sek.):",
             font=FONT_SMALL, text_color=ON_SURF_M,
-        ).grid(row=1, column=0, sticky="w", padx=(0, 8))
+        ).grid(row=1, column=0, sticky="w", pady=(0, 4))
         ctk.CTkEntry(
             self._sleep_frame, textvariable=self._sv_grace,
             fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
             justify="center", font=FONT_NUM, width=70,
-        ).grid(row=1, column=1, sticky="w", padx=(0, 16))
+        ).grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(0, 4))
 
         ctk.CTkLabel(
             self._sleep_frame, text="Post-Wake-Verzoegerung (Sek.):",
             font=FONT_SMALL, text_color=ON_SURF_M,
-        ).grid(row=1, column=2, sticky="w", padx=(0, 8))
+        ).grid(row=2, column=0, sticky="w")
         ctk.CTkEntry(
             self._sleep_frame, textvariable=self._sv_postwake,
             fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
             justify="center", font=FONT_NUM, width=70,
-        ).grid(row=1, column=3, sticky="w")
+        ).grid(row=2, column=1, sticky="w", padx=(10, 0))
         self._sleep_frame.grid_remove()
 
         # ---- Target Window selector ----
@@ -237,14 +236,14 @@ class FormPanel:
         )
         ctk.CTkEntry(
             lf, textvariable=self._sv_lbl,
-            fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF, width=120,
-        ).grid(row=0, column=1, sticky="ew", padx=(0, 12))
+            fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
+        ).grid(row=0, column=1, sticky="ew")
 
         ctk.CTkButton(
             lf, text="+ Zur Warteschlange", command=self._on_add_clicked,
             fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
-            width=148, font=FONT_BOLD, corner_radius=8,
-        ).grid(row=0, column=2, sticky="e")
+            font=FONT_BOLD, corner_radius=8,
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
     # ------------------------------------------------------------------
     # Presets card
@@ -346,6 +345,7 @@ class FormPanel:
                 fg_color=SURFACE_L, hover_color=PRIMARY_HOV,
                 border_width=1, border_color=OUTLINE,
                 text_color=ON_SURF, height=24, font=FONT_SMALL,
+                width=45,
             ).grid(row=r, column=c, padx=2, pady=2, sticky="ew")
 
     # ------------------------------------------------------------------
@@ -491,7 +491,7 @@ class FormPanel:
             "Sleep & Wake": "sleep",
             "Herunterfahren": "shutdown",
         }
-        action = action_map.get(self._act_seg.get(), "enter")
+        action = action_map.get(self._act_combo.get(), "enter")
 
         if action == "sleep" and not _is_admin():
             messagebox.showerror(
