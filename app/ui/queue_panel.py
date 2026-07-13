@@ -65,6 +65,9 @@ class QueuePanel:
         on_clear:  Callable[[], None],
         on_remove: Callable[[Item], None],
         is_running: Callable[[], bool],
+        on_save: Callable[[], None] = lambda: None,
+        on_load: Callable[[], None] = lambda: None,
+        on_start_later: Callable[[], None] = lambda: None,
     ) -> None:
         self._on_remove  = on_remove
         self._is_running = is_running
@@ -72,7 +75,7 @@ class QueuePanel:
         self._rendering = False
 
         self._build_queue_area(parent)
-        self._build_controls(parent, on_start, on_stop, on_reset, on_clear)
+        self._build_controls(parent, on_start, on_stop, on_reset, on_clear, on_save, on_load, on_start_later)
 
     # ------------------------------------------------------------------
     # Public API
@@ -131,10 +134,16 @@ class QueuePanel:
     def set_controls_enabled(self, running: bool) -> None:
         if running:
             self._start_btn.configure(state="disabled")
+            self._start_later_btn.configure(state="disabled")
             self._stop_btn.configure(state="normal")
+            self._save_btn.configure(state="disabled")
+            self._load_btn.configure(state="disabled")
         else:
             self._start_btn.configure(state="normal")
+            self._start_later_btn.configure(state="normal")
             self._stop_btn.configure(state="normal")
+            self._save_btn.configure(state="normal")
+            self._load_btn.configure(state="normal")
 
     # ------------------------------------------------------------------
     # Build helpers
@@ -171,46 +180,70 @@ class QueuePanel:
         on_stop: Callable,
         on_reset: Callable,
         on_clear: Callable,
+        on_save: Callable,
+        on_load: Callable,
+        on_start_later: Callable,
     ) -> None:
         self._controls = ctk.CTkFrame(parent, fg_color="transparent")
         self._controls.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        self._controls.grid_columnconfigure(4, weight=1)
+        self._controls.grid_columnconfigure(5, weight=1)
 
         self._start_btn = ctk.CTkButton(
             self._controls, text="Starten", command=on_start,
             fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
-            width=100, font=FONT_BOLD, corner_radius=8,
+            width=80, font=FONT_BOLD, corner_radius=8,
         )
-        self._start_btn.grid(row=0, column=0, padx=(0, 8))
+        self._start_btn.grid(row=0, column=0, padx=(0, 4))
+        
+        self._start_later_btn = ctk.CTkButton(
+            self._controls, text="Später...", command=on_start_later,
+            fg_color=SURFACE_L, hover_color=PRIMARY_HOV, text_color=ON_SURF,
+            width=70, font=FONT_BODY, corner_radius=8, border_width=1, border_color=PRIMARY,
+        )
+        self._start_later_btn.grid(row=0, column=1, padx=(0, 8))
 
         self._stop_btn = ctk.CTkButton(
             self._controls, text="Stop", command=on_stop,
             fg_color=SURFACE, border_width=1, border_color=OUTLINE,
-            hover_color=SURFACE_H, text_color=ON_SURF, width=80,
+            hover_color=SURFACE_H, text_color=ON_SURF, width=60,
             font=FONT_BODY, corner_radius=8,
         )
-        self._stop_btn.grid(row=0, column=1, padx=(0, 8))
+        self._stop_btn.grid(row=0, column=2, padx=(0, 4))
 
         self._reset_btn = ctk.CTkButton(
             self._controls, text="Reset", command=on_reset,
             fg_color=SURFACE, border_width=1, border_color=OUTLINE,
-            hover_color=SURFACE_H, text_color=ON_SURF, width=80,
+            hover_color=SURFACE_H, text_color=ON_SURF, width=60,
             font=FONT_BODY, corner_radius=8,
         )
-        self._reset_btn.grid(row=0, column=2, padx=(0, 8))
+        self._reset_btn.grid(row=0, column=3, padx=(0, 4))
 
         self._clear_btn = ctk.CTkButton(
             self._controls, text="Leeren", command=on_clear,
             fg_color=SURFACE, border_width=1, border_color=OUTLINE,
-            hover_color="#2e1414", text_color=ERROR, width=80,
+            hover_color="#2e1414", text_color=ERROR, width=60,
             font=FONT_BODY, corner_radius=8,
         )
-        self._clear_btn.grid(row=0, column=3)
+        self._clear_btn.grid(row=0, column=4)
 
         self._stat = ctk.CTkLabel(
             self._controls, text="", font=FONT_BODY, text_color=ON_SURF_M,
         )
-        self._stat.grid(row=0, column=4, sticky="e")
+        self._stat.grid(row=0, column=5, sticky="ew")
+        
+        self._save_btn = ctk.CTkButton(
+            self._controls, text="💾 Speichern", command=on_save,
+            fg_color=SURFACE, hover_color=SURFACE_H, text_color=ON_SURF,
+            width=100, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
+        )
+        self._save_btn.grid(row=0, column=6, padx=(8, 4))
+        
+        self._load_btn = ctk.CTkButton(
+            self._controls, text="📂 Laden", command=on_load,
+            fg_color=SURFACE, hover_color=SURFACE_H, text_color=ON_SURF,
+            width=80, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
+        )
+        self._load_btn.grid(row=0, column=7)
 
     def _build_row(self, item: Item, index: int) -> _RowRef:
         is_run  = item.status == "running"
@@ -285,19 +318,27 @@ class QueuePanel:
     def configure_slim(self) -> None:
         """Rearrange controls for narrow (single-column) layout."""
         self._start_btn.grid_configure(row=0, column=0, padx=2, pady=2, sticky="ew")
-        self._stop_btn.grid_configure(row=0, column=1, padx=2, pady=2, sticky="ew")
-        self._reset_btn.grid_configure(row=1, column=0, padx=2, pady=2, sticky="ew")
-        self._clear_btn.grid_configure(row=1, column=1, padx=2, pady=2, sticky="ew")
-        self._stat.grid_configure(row=2, column=0, columnspan=2, pady=(4, 0), sticky="w")
+        self._start_later_btn.grid_configure(row=0, column=1, padx=2, pady=2, sticky="ew")
+        self._stop_btn.grid_configure(row=1, column=0, padx=2, pady=2, sticky="ew")
+        self._reset_btn.grid_configure(row=1, column=1, padx=2, pady=2, sticky="ew")
+        self._clear_btn.grid_configure(row=2, column=0, padx=2, pady=2, sticky="ew")
+        self._stat.grid_configure(row=3, column=0, columnspan=2, pady=(4, 0), sticky="w")
+        self._save_btn.grid_configure(row=2, column=1, padx=2, pady=2, sticky="ew")
+        self._load_btn.grid_configure(row=4, column=1, padx=2, pady=2, sticky="ew") # Actually, better grouping: Save/Load on row 4
+        self._save_btn.grid_configure(row=4, column=0, padx=2, pady=2, sticky="ew")
+        
         self._controls.grid_columnconfigure((0, 1), weight=1)
-        self._controls.grid_columnconfigure((2, 3, 4), weight=0)
+        self._controls.grid_columnconfigure((2, 3, 4, 5, 6, 7), weight=0)
 
     def configure_wide(self) -> None:
         """Rearrange controls for wide (two-column) layout."""
-        self._start_btn.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="ew")
-        self._stop_btn.grid_configure(row=0, column=1, padx=(0, 8), pady=0, sticky="ew")
-        self._reset_btn.grid_configure(row=0, column=2, padx=(0, 8), pady=0, sticky="ew")
-        self._clear_btn.grid_configure(row=0, column=3, padx=0, pady=0, sticky="ew")
-        self._stat.grid_configure(row=0, column=4, padx=(8, 0), pady=0, sticky="e")
-        self._controls.grid_columnconfigure((0, 1, 2, 3), weight=1)
-        self._controls.grid_columnconfigure(4, weight=0)
+        self._start_btn.grid_configure(row=0, column=0, padx=(0, 4), pady=0, sticky="ew")
+        self._start_later_btn.grid_configure(row=0, column=1, padx=(0, 8), pady=0, sticky="ew")
+        self._stop_btn.grid_configure(row=0, column=2, padx=(0, 4), pady=0, sticky="ew")
+        self._reset_btn.grid_configure(row=0, column=3, padx=(0, 4), pady=0, sticky="ew")
+        self._clear_btn.grid_configure(row=0, column=4, padx=0, pady=0, sticky="ew")
+        self._stat.grid_configure(row=0, column=5, padx=(8, 0), pady=0, sticky="ew")
+        self._save_btn.grid_configure(row=0, column=6, padx=(8, 4), pady=0, sticky="ew")
+        self._load_btn.grid_configure(row=0, column=7, padx=0, pady=0, sticky="ew")
+        self._controls.grid_columnconfigure((0, 1, 2, 3, 4, 6, 7), weight=1)
+        self._controls.grid_columnconfigure(5, weight=1)

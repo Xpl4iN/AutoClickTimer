@@ -51,7 +51,10 @@ class AppWindow(ctk.CTk):
         # ---- Window events ----
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.bind("<Configure>", self._on_resize)
+        self.bind("<Unmap>", self._on_minimize)
         self._is_slim = False
+        self._tray_icon = None
+        
         self.after(150, self._init_layout)
         # Check for updates 3 s after startup so it doesn't delay first paint
         self.after(3000, self._start_update_check)
@@ -71,7 +74,8 @@ class AppWindow(ctk.CTk):
         self._hdr.grid(row=0, column=0, columnspan=2, sticky="ew", padx=24, pady=(18, 6))
         self._hdr.grid_columnconfigure(0, weight=0)
         self._hdr.grid_columnconfigure(1, weight=1)
-        self._hdr.grid_columnconfigure(2, weight=0)  # update button column
+        self._hdr.grid_columnconfigure(2, weight=0)  # caffeine switch
+        self._hdr.grid_columnconfigure(3, weight=0)  # update button column
 
         self._title_lbl = ctk.CTkLabel(
             self._hdr, text=f"AutoClick Timer  v{VERSION}", font=FONT_TITLE, text_color=ON_SURF
@@ -86,8 +90,15 @@ class AppWindow(ctk.CTk):
             corner_radius=8, width=120,
             command=self._on_update_click,
         )
-        self._update_btn.grid(row=0, column=2, padx=(12, 0))
+        self._update_btn.grid(row=0, column=3, padx=(12, 0))
         self._update_btn.grid_remove()   # hidden until update found
+        
+        self._caffeine_var = ctk.BooleanVar(value=False)
+        self._caffeine_switch = ctk.CTkSwitch(
+            self._hdr, text="☕ Caffeine", variable=self._caffeine_var,
+            font=FONT_SMALL, text_color=ON_SURF, command=self._on_caffeine_toggle
+        )
+        self._caffeine_switch.grid(row=0, column=2, padx=(12, 12), sticky="e")
 
         self._failsafe_lbl = ctk.CTkLabel(
             self._hdr,
@@ -124,6 +135,9 @@ class AppWindow(ctk.CTk):
             on_clear=self._on_clear,
             on_remove=self._on_remove,
             is_running=lambda: self._executor.running,
+            on_save=self._on_save,
+            on_load=self._on_load,
+            on_start_later=self._on_start_later,
         )
 
     def _init_layout(self) -> None:
@@ -271,6 +285,78 @@ class AppWindow(ctk.CTk):
         self._queue_panel.set_status("")
         self._log.append("Warteschlange geleert.")
 
+    def _on_caffeine_toggle(self) -> None:
+        active = self._caffeine_var.get()
+        self._executor.set_caffeine(active)
+        if active:
+            self._log.append("☕ Caffeine Mode aktiviert (Anti-Lock).")
+        else:
+            self._log.append("Caffeine Mode deaktiviert.")
+
+    def _on_save(self) -> None:
+        import json
+        from tkinter import filedialog
+        if not self._queue:
+            return
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".act",
+            filetypes=[("AutoClickTimer Profile", "*.act"), ("All Files", "*.*")],
+        )
+        if not filepath:
+            return
+        try:
+            data = [item.to_dict() for item in self._queue]
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            self._log.append(f"Profil gespeichert: {filepath}")
+        except Exception as e:
+            self._log.append(f"Fehler beim Speichern: {e}")
+
+    def _on_load(self) -> None:
+        import json
+        from tkinter import filedialog
+        if self._executor.running:
+            return
+        filepath = filedialog.askopenfilename(
+            filetypes=[("AutoClickTimer Profile", "*.act"), ("All Files", "*.*")],
+        )
+        if not filepath:
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self._queue.clear()
+            for d in data:
+                self._queue.append(Item.from_dict(d))
+            self._queue_panel.render(self._queue)
+            self._log.append(f"Profil geladen: {filepath}")
+        except Exception as e:
+            self._log.append(f"Fehler beim Laden: {e}")
+
+    def _on_start_later(self) -> None:
+        if self._executor.running or not self._queue:
+            return
+        import tkinter.simpledialog
+        from datetime import datetime, timedelta
+        
+        ans = tkinter.simpledialog.askstring(
+            "Später starten", 
+            "In wie vielen Minuten soll die Warteschlange starten?",
+            parent=self
+        )
+        if not ans:
+            return
+        try:
+            delay = int(ans)
+            if delay <= 0:
+                return
+            start_at = datetime.now() + timedelta(minutes=delay)
+            self._queue_panel.set_controls_enabled(running=True)
+            self._log.append(f"Warteschlange geplant für {start_at.strftime('%H:%M:%S')} (in {delay} Min).")
+            self._executor.start(self._queue, start_at=start_at)
+        except ValueError:
+            self._log.append("Ungültige Eingabe für geplanten Start.")
+
     # ------------------------------------------------------------------
     # Auto-update
     # ------------------------------------------------------------------
@@ -321,7 +407,7 @@ class AppWindow(ctk.CTk):
         threading.Thread(target=do_update, daemon=True).start()
 
 
-    def _load_icon(self) -> None:
+    def _get_icon_path(self) -> str | None:
         icon_name = "image.ico"
         candidates = []
         if hasattr(sys, "_MEIPASS"):
@@ -334,11 +420,50 @@ class AppWindow(ctk.CTk):
         candidates.append(os.path.join(os.path.expanduser("~"), "Downloads", icon_name))
         for path in candidates:
             if os.path.exists(path):
-                try:
-                    self.iconbitmap(path)
-                except Exception:
-                    pass
-                break
+                return path
+        return None
+
+    def _load_icon(self) -> None:
+        path = self._get_icon_path()
+        if path:
+            try:
+                self.iconbitmap(path)
+            except Exception:
+                pass
+
+    def _on_minimize(self, event) -> None:
+        if str(event.widget) == str(self):
+            try:
+                import pystray
+                from PIL import Image
+                self.withdraw()  # hide the window
+                icon_path = self._get_icon_path()
+                if icon_path:
+                    image = Image.open(icon_path)
+                else:
+                    image = Image.new('RGB', (64, 64), color=(73, 109, 137))
+                
+                menu = pystray.Menu(
+                    pystray.MenuItem('Anzeigen', self._tray_show),
+                    pystray.MenuItem('Stop', lambda: self.after(0, self._on_stop)),
+                    pystray.MenuItem('Beenden', self._tray_quit)
+                )
+                self._tray_icon = pystray.Icon("AutoClickTimer", image, "AutoClickTimer", menu)
+                threading.Thread(target=self._tray_icon.run, daemon=True).start()
+            except ImportError:
+                pass
+
+    def _tray_show(self, icon, item) -> None:
+        if self._tray_icon:
+            self._tray_icon.stop()
+            self._tray_icon = None
+        self.after(0, self.deiconify)
+
+    def _tray_quit(self, icon, item) -> None:
+        if self._tray_icon:
+            self._tray_icon.stop()
+            self._tray_icon = None
+        self.after(0, self._on_close)
 
     def _on_close(self) -> None:
         self._alive = False       # stop executor callbacks from posting to after()

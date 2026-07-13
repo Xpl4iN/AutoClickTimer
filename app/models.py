@@ -9,13 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-ActionType = Literal["enter", "click", "type", "sleep"]
+ActionType = Literal["enter", "click", "type", "sleep", "shutdown"]
 
 ACTION_LABELS: dict[str, str] = {
     "enter": "Enter druecken",
     "click": "Linksklick",
     "type": "Prompt senden",
     "sleep": "Sleep & Wake",
+    "shutdown": "Herunterfahren",
 }
 
 
@@ -40,12 +41,14 @@ class Item:
     prompt: str = ""                    # Text payload for the "type" action
     label: str = ""                     # Human-readable display name
     sleep_cfg: SleepConfig = field(default_factory=SleepConfig)
+    target_window: str = ""             # The window title to target (empty means global)
+    require_foreground: bool = False    # Whether to force the target window to foreground
 
     # ---- Runtime state (not constructor arguments) ----
     status: str = field(default="waiting", init=False, repr=False)
-    rem: int = field(default=0, init=False, repr=False)      # Remaining seconds for current phase
-    phase: str = field(default="", init=False, repr=False)   # Sub-phase for sleep items
-    phase_total: int = field(default=0, init=False, repr=False)  # Total seconds of current phase
+    rem: int = field(init=False, repr=False)
+    phase: str = field(default="", init=False, repr=False)
+    phase_total: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.rem = self.total

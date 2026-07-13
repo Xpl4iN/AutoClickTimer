@@ -38,6 +38,28 @@ def _is_admin() -> bool:
     except Exception:
         return False
 
+def _get_open_windows() -> list[str]:
+    import ctypes
+    EnumWindows = ctypes.windll.user32.EnumWindows
+    EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int))
+    GetWindowText = ctypes.windll.user32.GetWindowTextW
+    GetWindowTextLength = ctypes.windll.user32.GetWindowTextLengthW
+    IsWindowVisible = ctypes.windll.user32.IsWindowVisible
+
+    titles = ["(Global / Aktives Fenster)"]
+    def foreach_window(hwnd, lParam):
+        if IsWindowVisible(hwnd):
+            length = GetWindowTextLength(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                GetWindowText(hwnd, buff, length + 1)
+                title = buff.value
+                if title and title not in titles:
+                    titles.append(title)
+        return True
+    EnumWindows(EnumWindowsProc(foreach_window), 0)
+    return titles
+
 
 class FormPanel:
     """
@@ -64,6 +86,8 @@ class FormPanel:
         self._sv_lbl  = tk.StringVar()
         self._sv_grace    = tk.StringVar(value="5")
         self._sv_postwake = tk.StringVar(value="30")
+        self._target_window = tk.StringVar(value="(Global / Aktives Fenster)")
+        self._require_foreground = tk.BooleanVar(value=False)
 
         self._build_form_card(parent)
         self._build_presets_card(parent)
@@ -110,7 +134,7 @@ class FormPanel:
         )
         self._act_seg = ctk.CTkSegmentedButton(
             af,
-            values=["Enter", "Linksklick", "Prompt senden", "Sleep & Wake"],
+            values=["Enter", "Linksklick", "Prompt senden", "Sleep & Wake", "Herunterfahren"],
             command=self._on_action_change,
             fg_color=SURFACE_L, selected_color=PRIMARY,
             selected_hover_color=PRIMARY_HOV,
@@ -169,9 +193,42 @@ class FormPanel:
         ).grid(row=1, column=3, sticky="w")
         self._sleep_frame.grid_remove()
 
+        # ---- Target Window selector ----
+        self._target_frame = ctk.CTkFrame(card, fg_color="transparent")
+        self._target_frame.grid(row=5, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
+        self._target_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            self._target_frame, text="Ziel-Fenster (Background-Input):",
+            font=FONT_SMALL, text_color=ON_SURF_M,
+        ).grid(row=0, column=0, sticky="w", pady=(0, 2))
+        
+        tw_inner = ctk.CTkFrame(self._target_frame, fg_color="transparent")
+        tw_inner.grid(row=1, column=0, sticky="ew")
+        tw_inner.grid_columnconfigure(0, weight=1)
+
+        self._window_combo = ctk.CTkComboBox(
+            tw_inner, variable=self._target_window, values=_get_open_windows(),
+            fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF, font=FONT_BODY,
+        )
+        self._window_combo.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        
+        ctk.CTkButton(
+            tw_inner, text="↻", width=30,
+            command=lambda: self._window_combo.configure(values=_get_open_windows()),
+            fg_color=SURFACE_L, hover_color=PRIMARY_HOV, border_width=1, border_color=OUTLINE,
+            text_color=ON_SURF, font=FONT_BODY,
+        ).grid(row=0, column=1)
+
+        ctk.CTkCheckBox(
+            self._target_frame, text="Zwingend in den Vordergrund holen",
+            variable=self._require_foreground,
+            font=FONT_SMALL, text_color=ON_SURF, fg_color=PRIMARY, hover_color=PRIMARY_HOV,
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+
         # ---- Label + Add button ----
         lf = ctk.CTkFrame(card, fg_color="transparent")
-        lf.grid(row=5, column=0, columnspan=4, sticky="ew", padx=16, pady=(6, 12))
+        lf.grid(row=6, column=0, columnspan=4, sticky="ew", padx=16, pady=(6, 12))
         lf.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(lf, text="Bezeichnung:", font=FONT_SMALL, text_color=ON_SURF_M).grid(
@@ -431,6 +488,7 @@ class FormPanel:
             "Linksklick": "click",
             "Prompt senden": "type",
             "Sleep & Wake": "sleep",
+            "Herunterfahren": "shutdown",
         }
         action = action_map.get(self._act_seg.get(), "enter")
 
@@ -449,10 +507,17 @@ class FormPanel:
                 return None
 
         sleep_cfg = self._get_sleep_config() if action == "sleep" else SleepConfig()
+        
+        tw = self._target_window.get()
+        if tw == "(Global / Aktives Fenster)":
+            tw = ""
+
         return Item(
             total=total,
             action=action,  # type: ignore[arg-type]
             prompt=prompt,
             label=self._sv_lbl.get().strip(),
             sleep_cfg=sleep_cfg,
+            target_window=tw,
+            require_foreground=self._require_foreground.get(),
         )

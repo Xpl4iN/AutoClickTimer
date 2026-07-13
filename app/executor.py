@@ -14,6 +14,7 @@ Public API:
 from __future__ import annotations
 
 import time
+import datetime
 import threading
 from dataclasses import dataclass
 from typing import Callable, List, Optional
@@ -55,6 +56,33 @@ class QueueExecutor:
         self._stop_ev = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._sleep_mgr = SleepManager(callbacks.on_log)
+        
+        self._caffeine_active = False
+        self._caffeine_thread: Optional[threading.Thread] = None
+
+    def set_caffeine(self, active: bool) -> None:
+        self._caffeine_active = active
+        if active and (self._caffeine_thread is None or not self._caffeine_thread.is_alive()):
+            self._caffeine_thread = threading.Thread(target=self._caffeine_loop, daemon=True)
+            self._caffeine_thread.start()
+
+    def _caffeine_loop(self) -> None:
+        import ctypes
+        VK_SCROLL = 0x91
+        KEYEVENTF_KEYUP = 0x0002
+        while self._caffeine_active:
+            # Tap ScrollLock twice
+            ctypes.windll.user32.keybd_event(VK_SCROLL, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(VK_SCROLL, 0, KEYEVENTF_KEYUP, 0)
+            time.sleep(0.05)
+            ctypes.windll.user32.keybd_event(VK_SCROLL, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(VK_SCROLL, 0, KEYEVENTF_KEYUP, 0)
+            
+            # Wait 55 seconds, checking for cancellation
+            for _ in range(110):
+                if not self._caffeine_active:
+                    return
+                time.sleep(0.5)
 
     # ------------------------------------------------------------------
     # Public API
@@ -64,14 +92,14 @@ class QueueExecutor:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self, queue: List[Item]) -> None:
+    def start(self, queue: List[Item], start_at: Optional[datetime.datetime] = None) -> None:
         if self.running:
             return
         for item in queue:
             item.reset()
         self._stop_ev.clear()
         self._thread = threading.Thread(
-            target=self._run, args=(list(queue),), daemon=True
+            target=self._run, args=(list(queue), start_at), daemon=True
         )
         self._thread.start()
 
@@ -83,8 +111,13 @@ class QueueExecutor:
     # Worker
     # ------------------------------------------------------------------
 
-    def _run(self, queue: List[Item]) -> None:
+    def _run(self, queue: List[Item], start_at: Optional[datetime.datetime] = None) -> None:
         try:
+            if start_at:
+                while datetime.datetime.now() < start_at:
+                    if self._stop_ev.wait(0.4):
+                        return
+                    
             for i, item in enumerate(queue):
                 if self._stop_ev.is_set():
                     break
@@ -237,6 +270,61 @@ class QueueExecutor:
 def _dispatch_action(item: Item) -> None:
     """Execute the physical action for item. May raise any exception."""
     time.sleep(0.2)  # brief stabilisation delay
+
+    target_hwnd = None
+    prev_hwnd = None
+
+    if getattr(item, "target_window", ""):
+        import ctypes
+        import ctypes.wintypes
+        target_hwnd = ctypes.windll.user32.FindWindowW(None, item.target_window)
+        if target_hwnd:
+            if getattr(item, "require_foreground", False):
+                prev_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                ctypes.windll.user32.SetForegroundWindow(target_hwnd)
+                time.sleep(0.2)
+
+                if item.action == "click":
+                    rect = ctypes.wintypes.RECT()
+                    ctypes.windll.user32.GetWindowRect(target_hwnd, ctypes.byref(rect))
+                    cx = rect.left + (rect.right - rect.left) // 2
+                    cy = rect.top + (rect.bottom - rect.top) // 2
+                    pyautogui.moveTo(cx, cy)
+            else:
+                # Background execution branch
+                WM_KEYDOWN = 0x0100
+                WM_KEYUP = 0x0101
+                WM_CHAR = 0x0102
+                WM_LBUTTONDOWN = 0x0201
+                WM_LBUTTONUP = 0x0202
+                VK_RETURN = 0x0D
+
+                if item.action == "enter":
+                    ctypes.windll.user32.PostMessageW(target_hwnd, WM_KEYDOWN, VK_RETURN, 0)
+                    time.sleep(0.05)
+                    ctypes.windll.user32.PostMessageW(target_hwnd, WM_KEYUP, VK_RETURN, 0)
+                    return
+                elif item.action == "click":
+                    rect = ctypes.wintypes.RECT()
+                    ctypes.windll.user32.GetClientRect(target_hwnd, ctypes.byref(rect))
+                    w = rect.right - rect.left
+                    h = rect.bottom - rect.top
+                    x, y = w // 2, h // 2
+                    lparam = (y << 16) | (x & 0xFFFF)
+                    ctypes.windll.user32.PostMessageW(target_hwnd, WM_LBUTTONDOWN, 1, lparam)
+                    time.sleep(0.05)
+                    ctypes.windll.user32.PostMessageW(target_hwnd, WM_LBUTTONUP, 0, lparam)
+                    return
+                elif item.action == "type":
+                    for char in item.prompt:
+                        ctypes.windll.user32.SendMessageW(target_hwnd, WM_CHAR, ord(char), 0)
+                        time.sleep(0.01)
+                    time.sleep(0.1)
+                    ctypes.windll.user32.PostMessageW(target_hwnd, WM_KEYDOWN, VK_RETURN, 0)
+                    time.sleep(0.05)
+                    ctypes.windll.user32.PostMessageW(target_hwnd, WM_KEYUP, VK_RETURN, 0)
+                    return
+
     if item.action == "enter":
         pyautogui.press("enter")
     elif item.action == "click":
@@ -249,3 +337,11 @@ def _dispatch_action(item: Item) -> None:
         pyautogui.press("enter")
     elif item.action == "sleep":
         pass  # sleep items don't dispatch a physical action
+    elif item.action == "shutdown":
+        import subprocess
+        subprocess.Popen(["shutdown", "/s", "/t", "0"])
+
+    if prev_hwnd:
+        time.sleep(0.2)
+        import ctypes
+        ctypes.windll.user32.SetForegroundWindow(prev_hwnd)
