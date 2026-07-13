@@ -337,14 +337,13 @@ class AppWindow(ctk.CTk):
     def _on_start_later(self) -> None:
         if self._executor.running or not self._queue:
             return
-        import tkinter.simpledialog
         from datetime import datetime, timedelta
         
-        ans = tkinter.simpledialog.askstring(
-            "Später starten", 
-            "In wie vielen Minuten soll die Warteschlange starten?",
-            parent=self
+        dialog = ctk.CTkInputDialog(
+            title="Später starten", 
+            text="In wie vielen Minuten soll die Warteschlange starten?"
         )
+        ans = dialog.get_input()
         if not ans:
             return
         try:
