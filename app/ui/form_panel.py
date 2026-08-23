@@ -84,8 +84,17 @@ class FormPanel:
         self._clk_m   = tk.StringVar(value=str(now.minute))
         self._clk_s   = tk.StringVar(value="0")
         self._sv_lbl  = tk.StringVar()
-        self._sv_grace    = tk.StringVar(value="5")
+
+        # Sleep config StringVars
+        self._sleep_mode  = tk.StringVar(value="duration")
+        self._sv_grace_h  = tk.StringVar(value="0")
+        self._sv_grace_m  = tk.StringVar(value="0")
+        self._sv_grace_s  = tk.StringVar(value="5")
+        self._clk_grace_h = tk.StringVar(value=str(now.hour))
+        self._clk_grace_m = tk.StringVar(value=str(now.minute))
+        self._clk_grace_s = tk.StringVar(value=str(now.second))
         self._sv_postwake = tk.StringVar(value="30")
+
         self._target_window = tk.StringVar(value="(Global / Aktives Fenster)")
         self._require_foreground = tk.BooleanVar(value=False)
 
@@ -164,32 +173,62 @@ class FormPanel:
         # ---- Sleep config inputs (hidden unless "Sleep & Wake") ----
         self._sleep_frame = ctk.CTkFrame(card, fg_color="transparent")
         self._sleep_frame.grid(row=4, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
-        self._sleep_frame.grid_columnconfigure(1, weight=1)
+        self._sleep_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         ctk.CTkLabel(
             self._sleep_frame, text="Sleep-Konfiguration",
             font=FONT_LABEL, text_color=ON_SURF_M,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 6))
+
+        # Pre-sleep mode selector
+        sm_frame = ctk.CTkFrame(self._sleep_frame, fg_color="transparent")
+        sm_frame.grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 4))
+
+        ctk.CTkLabel(sm_frame, text="Wartezeit vor Schlaf:", font=FONT_SMALL, text_color=ON_SURF_M).pack(
+            side="left", padx=(0, 12)
+        )
+        for text, val in [("Timer (Dauer)", "duration"), ("Uhrzeit", "clock")]:
+            ctk.CTkRadioButton(
+                sm_frame, text=text, variable=self._sleep_mode, value=val,
+                command=self._on_sleep_mode_change,
+                fg_color=PRIMARY, hover_color=PRIMARY_HOV,
+                text_color=ON_SURF, font=FONT_BODY,
+            ).pack(side="left", padx=(0, 16))
+
+        # Dynamic inputs for pre-sleep
+        self._sleep_inputs_frame = ctk.CTkFrame(self._sleep_frame, fg_color="transparent")
+        self._sleep_inputs_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(2, 6))
+        self._sleep_inputs_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        self._render_sleep_inputs()
+
+        # Post-wake delay section
+        pw_section = ctk.CTkFrame(self._sleep_frame, fg_color="transparent")
+        pw_section.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(6, 0))
+        pw_section.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            self._sleep_frame, text="Wartezeit vor Schlaf (Sek.):",
+            pw_section, text="Post-Wake-Verzoegerung (Sek.):",
             font=FONT_SMALL, text_color=ON_SURF_M,
-        ).grid(row=1, column=0, sticky="w", pady=(0, 4))
-        ctk.CTkEntry(
-            self._sleep_frame, textvariable=self._sv_grace,
-            fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
-            justify="center", font=FONT_NUM, width=70,
-        ).grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(0, 4))
+        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
 
-        ctk.CTkLabel(
-            self._sleep_frame, text="Post-Wake-Verzoegerung (Sek.):",
-            font=FONT_SMALL, text_color=ON_SURF_M,
-        ).grid(row=2, column=0, sticky="w")
+        pw_row = ctk.CTkFrame(pw_section, fg_color="transparent")
+        pw_row.grid(row=1, column=0, sticky="w")
+
         ctk.CTkEntry(
-            self._sleep_frame, textvariable=self._sv_postwake,
+            pw_row, textvariable=self._sv_postwake,
             fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
-            justify="center", font=FONT_NUM, width=70,
-        ).grid(row=2, column=1, sticky="w", padx=(10, 0))
+            justify="center", font=FONT_NUM, width=55,
+        ).pack(side="left", padx=(0, 8))
+
+        for pw_val in [5, 10, 15, 30, 60]:
+            ctk.CTkButton(
+                pw_row, text=f"{pw_val}s",
+                command=lambda v=pw_val: self._sv_postwake.set(str(v)),
+                fg_color=SURFACE_L, hover_color=PRIMARY_HOV,
+                border_width=1, border_color=OUTLINE,
+                text_color=ON_SURF, height=24, width=38, font=FONT_SMALL,
+            ).pack(side="left", padx=2)
+
         self._sleep_frame.grid_remove()
 
         # ---- Target Window selector ----
@@ -226,24 +265,29 @@ class FormPanel:
             font=FONT_SMALL, text_color=ON_SURF, fg_color=PRIMARY, hover_color=PRIMARY_HOV,
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
 
-        # ---- Label + Add button ----
-        lf = ctk.CTkFrame(card, fg_color="transparent")
-        lf.grid(row=6, column=0, columnspan=4, sticky="ew", padx=16, pady=(6, 12))
-        lf.grid_columnconfigure(1, weight=1)
+        # ---- Label selector (hidden for Sleep & Wake and Herunterfahren) ----
+        self._label_frame = ctk.CTkFrame(card, fg_color="transparent")
+        self._label_frame.grid(row=6, column=0, columnspan=4, sticky="ew", padx=16, pady=(6, 4))
+        self._label_frame.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(lf, text="Bezeichnung:", font=FONT_SMALL, text_color=ON_SURF_M).grid(
+        ctk.CTkLabel(self._label_frame, text="Bezeichnung:", font=FONT_SMALL, text_color=ON_SURF_M).grid(
             row=0, column=0, sticky="w", padx=(0, 10)
         )
         ctk.CTkEntry(
-            lf, textvariable=self._sv_lbl,
+            self._label_frame, textvariable=self._sv_lbl,
             fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
         ).grid(row=0, column=1, sticky="ew")
 
+        # ---- Add button ----
+        add_frame = ctk.CTkFrame(card, fg_color="transparent")
+        add_frame.grid(row=7, column=0, columnspan=4, sticky="ew", padx=16, pady=(4, 12))
+        add_frame.grid_columnconfigure(0, weight=1)
+
         ctk.CTkButton(
-            lf, text="+ Zur Warteschlange", command=self._on_add_clicked,
+            add_frame, text="+ Zur Warteschlange", command=self._on_add_clicked,
             fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
             font=FONT_BOLD, corner_radius=8,
-        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        ).grid(row=0, column=0, sticky="ew")
 
     # ------------------------------------------------------------------
     # Presets card
@@ -348,12 +392,77 @@ class FormPanel:
                 width=45,
             ).grid(row=r, column=c, padx=2, pady=2, sticky="ew")
 
+    def _render_sleep_inputs(self) -> None:
+        for w in self._sleep_inputs_frame.winfo_children():
+            w.destroy()
+
+        if self._sleep_mode.get() == "duration":
+            fields = [("Stunden", self._sv_grace_h), ("Minuten", self._sv_grace_m), ("Sekunden", self._sv_grace_s)]
+            for col, (lbl, var) in enumerate(fields):
+                f = ctk.CTkFrame(self._sleep_inputs_frame, fg_color="transparent")
+                f.grid(row=0, column=col, sticky="ew", padx=(0, 8))
+                ctk.CTkLabel(f, text=lbl, font=FONT_SMALL, text_color=ON_SURF_M).pack(
+                    anchor="w", pady=(0, 2)
+                )
+                ctk.CTkEntry(
+                    f, textvariable=var,
+                    fg_color=SURFACE_L, border_color=OUTLINE,
+                    text_color=ON_SURF, justify="center",
+                    font=FONT_NUM, width=60,
+                ).pack(fill="x")
+            pr_row = 1
+        else:
+            fields = [("Stunde", self._clk_grace_h), ("Minute", self._clk_grace_m), ("Sekunde", self._clk_grace_s)]
+            for col, (lbl, var) in enumerate(fields):
+                f = ctk.CTkFrame(self._sleep_inputs_frame, fg_color="transparent")
+                f.grid(row=0, column=col, sticky="ew", padx=(0, 8))
+                ctk.CTkLabel(f, text=lbl, font=FONT_SMALL, text_color=ON_SURF_M).pack(
+                    anchor="w", pady=(0, 2)
+                )
+                ctk.CTkEntry(
+                    f, textvariable=var,
+                    fg_color=SURFACE_L, border_color=OUTLINE,
+                    text_color=ON_SURF, justify="center",
+                    font=FONT_NUM, width=60,
+                ).pack(fill="x")
+                var.trace_add("write", self._update_sleep_clock_preview)
+            self._clk_grace_preview = ctk.CTkLabel(
+                self._sleep_inputs_frame, text="",
+                font=FONT_SMALL, text_color=PRIMARY,
+            )
+            self._clk_grace_preview.grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+            self._update_sleep_clock_preview()
+            pr_row = 2
+
+        # ---- Quick time presets row for pre-sleep ----
+        pf = ctk.CTkFrame(self._sleep_inputs_frame, fg_color="transparent")
+        pf.grid(row=pr_row, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        pf.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+
+        presets = [
+            (5,  "s", "5s"),  (10, "s", "10s"), (30, "s", "30s"), (1, "m", "1m"),   (2, "m", "2m"),
+            (3,  "m", "3m"),  (5,  "m", "5m"),  (10, "m", "10m"), (15, "m", "15m"), (30, "m", "30m"),
+        ]
+        for idx, (amount, unit, lbl) in enumerate(presets):
+            r, c = divmod(idx, 5)
+            ctk.CTkButton(
+                pf, text=lbl,
+                command=lambda a=amount, u=unit: self._set_sleep_time_preset(a, u),
+                fg_color=SURFACE_L, hover_color=PRIMARY_HOV,
+                border_width=1, border_color=OUTLINE,
+                text_color=ON_SURF, height=24, font=FONT_SMALL,
+                width=42,
+            ).grid(row=r, column=c, padx=2, pady=2, sticky="ew")
+
     # ------------------------------------------------------------------
     # Event handlers
     # ------------------------------------------------------------------
 
     def _on_mode_change(self) -> None:
         self._render_inputs()
+
+    def _on_sleep_mode_change(self) -> None:
+        self._render_sleep_inputs()
 
     def _on_action_change(self, choice: str) -> None:
         if choice == "Prompt senden":
@@ -365,6 +474,13 @@ class FormPanel:
             self._sleep_frame.grid()
         else:
             self._sleep_frame.grid_remove()
+
+        if choice in ("Sleep & Wake", "Herunterfahren"):
+            self._target_frame.grid_remove()
+            self._label_frame.grid_remove()
+        else:
+            self._target_frame.grid()
+            self._label_frame.grid()
 
     def _update_clock_preview(self, *_) -> None:
         if self._mode.get() != "clock":
@@ -378,12 +494,33 @@ class FormPanel:
             if target <= now:
                 target += datetime.timedelta(days=1)
             delta = int((target - now).total_seconds())
-            self._clk_preview.configure(
-                text=f"-> in {fmt_short(delta)} (um {target.strftime('%H:%M:%S')})"
-            )
+            if hasattr(self, "_clk_preview"):
+                self._clk_preview.configure(
+                    text=f"-> in {fmt_short(delta)} (um {target.strftime('%H:%M:%S')})"
+                )
         except Exception:
             if hasattr(self, "_clk_preview"):
                 self._clk_preview.configure(text="")
+
+    def _update_sleep_clock_preview(self, *_) -> None:
+        if self._sleep_mode.get() != "clock":
+            return
+        try:
+            h = int(self._clk_grace_h.get() or 0)
+            m = int(self._clk_grace_m.get() or 0)
+            s = int(self._clk_grace_s.get() or 0)
+            now = datetime.datetime.now()
+            target = now.replace(hour=h, minute=m, second=s, microsecond=0)
+            if target <= now:
+                target += datetime.timedelta(days=1)
+            delta = int((target - now).total_seconds())
+            if hasattr(self, "_clk_grace_preview"):
+                self._clk_grace_preview.configure(
+                    text=f"-> in {fmt_short(delta)} (um {target.strftime('%H:%M:%S')})"
+                )
+        except Exception:
+            if hasattr(self, "_clk_grace_preview"):
+                self._clk_grace_preview.configure(text="")
 
     def _set_time_preset(self, amount: int, unit: str) -> None:
         if self._mode.get() == "duration":
@@ -392,16 +529,48 @@ class FormPanel:
             self._sv_s.set("0")
             if unit == "h":
                 self._sv_h.set(str(amount))
-            else:
+            elif unit == "m":
                 self._sv_m.set(str(amount))
+            else:
+                self._sv_s.set(str(amount))
         else:
             now = datetime.datetime.now()
-            delta = datetime.timedelta(hours=amount) if unit == "h" else datetime.timedelta(minutes=amount)
+            if unit == "h":
+                delta = datetime.timedelta(hours=amount)
+            elif unit == "m":
+                delta = datetime.timedelta(minutes=amount)
+            else:
+                delta = datetime.timedelta(seconds=amount)
             target = now + delta
             self._clk_h.set(str(target.hour))
             self._clk_m.set(str(target.minute))
             self._clk_s.set(str(target.second))
             self._update_clock_preview()
+
+    def _set_sleep_time_preset(self, amount: int, unit: str) -> None:
+        if self._sleep_mode.get() == "duration":
+            self._sv_grace_h.set("0")
+            self._sv_grace_m.set("0")
+            self._sv_grace_s.set("0")
+            if unit == "h":
+                self._sv_grace_h.set(str(amount))
+            elif unit == "m":
+                self._sv_grace_m.set(str(amount))
+            else:
+                self._sv_grace_s.set(str(amount))
+        else:
+            now = datetime.datetime.now()
+            if unit == "h":
+                delta = datetime.timedelta(hours=amount)
+            elif unit == "m":
+                delta = datetime.timedelta(minutes=amount)
+            else:
+                delta = datetime.timedelta(seconds=amount)
+            target = now + delta
+            self._clk_grace_h.set(str(target.hour))
+            self._clk_grace_m.set(str(target.minute))
+            self._clk_grace_s.set(str(target.second))
+            self._update_sleep_clock_preview()
 
     def _on_add_clicked(self) -> None:
         item = self._build_item()
@@ -470,13 +639,28 @@ class FormPanel:
 
     def _get_sleep_config(self) -> SleepConfig:
         try:
-            grace = max(0, int(self._sv_grace.get() or "5"))
+            if self._sleep_mode.get() == "duration":
+                h = int(self._sv_grace_h.get() or 0)
+                m = int(self._sv_grace_m.get() or 0)
+                s = int(self._sv_grace_s.get() or 0)
+                grace = max(0, h * 3600 + m * 60 + s)
+            else:
+                h = int(self._clk_grace_h.get() or 0)
+                m = int(self._clk_grace_m.get() or 0)
+                s = int(self._clk_grace_s.get() or 0)
+                now = datetime.datetime.now()
+                target = now.replace(hour=h, minute=m, second=s, microsecond=0)
+                if target <= now:
+                    target += datetime.timedelta(days=1)
+                grace = max(0, int((target - now).total_seconds()))
         except ValueError:
             grace = 5
+
         try:
             post = max(0, int(self._sv_postwake.get() or "30"))
         except ValueError:
             post = 30
+
         return SleepConfig(pre_sleep_grace=grace, post_wake_delay=post)
 
     def _build_item(self) -> Item | None:
@@ -513,11 +697,18 @@ class FormPanel:
         if tw == "(Global / Aktives Fenster)":
             tw = ""
 
+        lbl = self._sv_lbl.get().strip()
+        if not lbl:
+            if action == "sleep":
+                lbl = "Ruhezustand"
+            elif action == "shutdown":
+                lbl = "Herunterfahren"
+
         return Item(
             total=total,
             action=action,  # type: ignore[arg-type]
             prompt=prompt,
-            label=self._sv_lbl.get().strip(),
+            label=lbl,
             sleep_cfg=sleep_cfg,
             target_window=tw,
             require_foreground=self._require_foreground.get(),
