@@ -23,7 +23,11 @@ from app.models import Item
 from app.ui.form_panel import FormPanel
 from app.ui.log_panel import LogPanel
 from app.ui.queue_panel import QueuePanel
-from app.ui.theme import BG_COLOR, ON_SURF, ON_SURF_M, ERROR, WARNING, FONT_TITLE, FONT_SMALL, FONT_BOLD
+from app.ui.i18n import t, set_language, get_language, register_listener
+from app.ui.theme import (
+    BG_COLOR, SURFACE, SURFACE_L, SURFACE_H, OUTLINE, PRIMARY, PRIMARY_HOV,
+    ON_SURF, ON_SURF_M, ERROR, WARNING, FONT_TITLE, FONT_SMALL, FONT_BOLD,
+)
 from app.version import VERSION, REPO
 
 
@@ -54,7 +58,9 @@ class AppWindow(ctk.CTk):
         self.bind("<Unmap>", self._on_minimize)
         self._is_slim = False
         self._tray_icon = None
-        
+
+        register_listener(self.retranslate)
+
         self.after(150, self._init_layout)
         # Check for updates 3 s after startup so it doesn't delay first paint
         self.after(3000, self._start_update_check)
@@ -75,7 +81,8 @@ class AppWindow(ctk.CTk):
         self._hdr.grid_columnconfigure(0, weight=0)
         self._hdr.grid_columnconfigure(1, weight=1)
         self._hdr.grid_columnconfigure(2, weight=0)  # caffeine switch
-        self._hdr.grid_columnconfigure(3, weight=0)  # update button column
+        self._hdr.grid_columnconfigure(3, weight=0)  # lang pill
+        self._hdr.grid_columnconfigure(4, weight=0)  # update button column
 
         self._title_lbl = ctk.CTkLabel(
             self._hdr, text=f"AutoClick Timer  v{VERSION}", font=FONT_TITLE, text_color=ON_SURF
@@ -90,23 +97,40 @@ class AppWindow(ctk.CTk):
             corner_radius=8, width=120,
             command=self._on_update_click,
         )
-        self._update_btn.grid(row=0, column=3, padx=(12, 0))
+        self._update_btn.grid(row=0, column=4, padx=(8, 0))
         self._update_btn.grid_remove()   # hidden until update found
         
         self._caffeine_var = ctk.BooleanVar(value=False)
         self._caffeine_switch = ctk.CTkSwitch(
-            self._hdr, text="Caffeine", variable=self._caffeine_var,
+            self._hdr, text=t("caffeine"), variable=self._caffeine_var,
             font=FONT_SMALL, text_color=ON_SURF, command=self._on_caffeine_toggle
         )
-        self._caffeine_switch.grid(row=0, column=2, padx=(12, 12), sticky="e")
+        self._caffeine_switch.grid(row=0, column=2, padx=(10, 8), sticky="e")
+
+        # Language Switcher Pill [ DE | EN ]
+        self._lang_pill = ctk.CTkSegmentedButton(
+            self._hdr, values=["DE", "EN"],
+            command=self._on_lang_switch,
+            font=("Segoe UI", 11, "bold"),
+            width=84, height=28, corner_radius=8,
+            fg_color=SURFACE,
+            selected_color=PRIMARY,
+            selected_hover_color=PRIMARY_HOV,
+            unselected_color=SURFACE_L,
+            unselected_hover_color=SURFACE_H,
+            text_color=ON_SURF,
+            dynamic_resizing=False,
+        )
+        self._lang_pill.set("DE" if get_language() == "de" else "EN")
+        self._lang_pill.grid(row=0, column=3, padx=(4, 0), sticky="e")
 
         self._failsafe_lbl = ctk.CTkLabel(
             self._hdr,
-            text="Notfall-Stop: Maus ganz oben-links in die Bildschirmecke schieben",
+            text=t("failsafe_tip"),
             font=("Segoe UI", 10, "bold"), text_color=ERROR,
-            wraplength=400, justify="right",
+            wraplength=380, justify="right",
         )
-        self._failsafe_lbl.grid(row=0, column=1, sticky="e")
+        self._failsafe_lbl.grid(row=0, column=1, padx=(12, 12), sticky="e")
 
         # Left panel
         self._left = ctk.CTkFrame(self, fg_color="transparent")
@@ -139,6 +163,15 @@ class AppWindow(ctk.CTk):
             on_start_later=self._on_start_later,
         )
 
+    def _on_lang_switch(self, val: str) -> None:
+        set_language("de" if val == "DE" else "en")
+
+    def retranslate(self, lang: str = "de") -> None:
+        self._failsafe_lbl.configure(text=t("failsafe_tip"))
+        self._caffeine_switch.configure(text=t("caffeine"))
+        if self._update_info:
+            self._update_btn.configure(text=t("update_available", tag=self._update_info.tag))
+
     def _init_layout(self) -> None:
         self.update_idletasks()
         is_slim = self.winfo_width() < 890
@@ -163,7 +196,7 @@ class AppWindow(ctk.CTk):
 
             self._hdr.grid_configure(columnspan=1)
             self._title_lbl.grid_configure(row=0, column=0, sticky="w")
-            self._failsafe_lbl.grid_configure(row=1, column=0, sticky="w", pady=(2, 0))
+            self._failsafe_lbl.grid_configure(row=1, column=0, columnspan=4, sticky="w", padx=0, pady=(2, 0))
 
             self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=16, pady=(10, 6))
             self._right.grid_configure(row=2, column=0, columnspan=1, sticky="nsew", padx=16, pady=(6, 16))
@@ -178,7 +211,7 @@ class AppWindow(ctk.CTk):
 
             self._hdr.grid_configure(columnspan=2)
             self._title_lbl.grid_configure(row=0, column=0, sticky="w")
-            self._failsafe_lbl.grid_configure(row=0, column=1, sticky="e", pady=0)
+            self._failsafe_lbl.grid_configure(row=0, column=1, columnspan=1, sticky="e", padx=(12, 12), pady=0)
 
             self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=(20, 10), pady=(10, 16))
             self._right.grid_configure(row=1, column=1, columnspan=1, sticky="nsew", padx=(10, 20), pady=(10, 16))
@@ -220,20 +253,20 @@ class AppWindow(ctk.CTk):
         self._queue_panel.update_row(item)
 
     def _cb_step_start(self, item: Item, index: int, total: int) -> None:
-        self._queue_panel.set_status(f"Schritt {index + 1}/{total} laeuft...")
+        self._queue_panel.set_status(t("step_running", index=index + 1, total=total))
         self._queue_panel.render(self._queue)
 
     def _cb_step_done(self, item: Item) -> None:
         self._queue_panel.render(self._queue)
 
     def _cb_all_done(self, count: int) -> None:
-        self._log.append(f"Alle {count} Aktionen abgeschlossen!")
-        self._queue_panel.set_status("Fertig!")
+        self._log.append(t("all_done", count=count))
+        self._queue_panel.set_status(t("status_done"))
         self._queue_panel.set_controls_enabled(running=False)
 
     def _cb_stopped(self) -> None:
-        self._log.append("Gestoppt.")
-        self._queue_panel.set_status("Gestoppt.")
+        self._log.append(t("stopped"))
+        self._queue_panel.set_status(t("stopped"))
         self._queue_panel.set_controls_enabled(running=False)
 
     def _cb_log(self, msg: str) -> None:
@@ -241,7 +274,7 @@ class AppWindow(ctk.CTk):
 
     def _cb_failsafe(self) -> None:
         self._executor.stop()
-        self._queue_panel.set_status("Failsafe!")
+        self._queue_panel.set_status(t("failsafe_status"))
         self._queue_panel.set_controls_enabled(running=False)
 
     # ------------------------------------------------------------------
@@ -251,7 +284,7 @@ class AppWindow(ctk.CTk):
     def _on_add(self, item: Item) -> None:
         self._queue.append(item)
         self._queue_panel.render(self._queue)
-        self._log.append(f"+ [{item.label}] {item.total}s hinzugefuegt.")
+        self._log.append(t("log_item_added", label=item.label, total=item.total))
 
     def _on_remove(self, item: Item) -> None:
         if self._executor.running:
@@ -263,7 +296,7 @@ class AppWindow(ctk.CTk):
         if self._executor.running or not self._queue:
             return
         self._queue_panel.set_controls_enabled(running=True)
-        self._log.append("Warteschlange gestartet.")
+        self._log.append(t("log_queue_started"))
         self._executor.start(self._queue)
 
     def _on_stop(self) -> None:
@@ -277,7 +310,7 @@ class AppWindow(ctk.CTk):
             item.reset()
         self._queue_panel.render(self._queue)
         self._queue_panel.set_status("")
-        self._log.append("Zurueckgesetzt.")
+        self._log.append(t("log_reset"))
 
     def _on_clear(self) -> None:
         if self._executor.running:
@@ -285,15 +318,15 @@ class AppWindow(ctk.CTk):
         self._queue.clear()
         self._queue_panel.render(self._queue)
         self._queue_panel.set_status("")
-        self._log.append("Warteschlange geleert.")
+        self._log.append(t("log_queue_cleared"))
 
     def _on_caffeine_toggle(self) -> None:
         active = self._caffeine_var.get()
         self._executor.set_caffeine(active)
         if active:
-            self._log.append("Caffeine Mode aktiviert (Anti-Lock).")
+            self._log.append(t("log_caffeine_on"))
         else:
-            self._log.append("Caffeine Mode deaktiviert.")
+            self._log.append(t("log_caffeine_off"))
 
     def _on_save(self) -> None:
         import json
@@ -310,9 +343,9 @@ class AppWindow(ctk.CTk):
             data = [item.to_dict() for item in self._queue]
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
-            self._log.append(f"Profil gespeichert: {filepath}")
+            self._log.append(t("log_profile_saved", path=filepath))
         except Exception as e:
-            self._log.append(f"Fehler beim Speichern: {e}")
+            self._log.append(t("log_profile_save_err", err=e))
 
     def _on_load(self) -> None:
         import json
@@ -331,9 +364,9 @@ class AppWindow(ctk.CTk):
             for d in data:
                 self._queue.append(Item.from_dict(d))
             self._queue_panel.render(self._queue)
-            self._log.append(f"Profil geladen: {filepath}")
+            self._log.append(t("log_profile_loaded", path=filepath))
         except Exception as e:
-            self._log.append(f"Fehler beim Laden: {e}")
+            self._log.append(t("log_profile_load_err", err=e))
 
     def _on_start_later(self) -> None:
         if self._executor.running or not self._queue:
@@ -341,8 +374,8 @@ class AppWindow(ctk.CTk):
         from datetime import datetime, timedelta
         
         dialog = ctk.CTkInputDialog(
-            title="Später starten", 
-            text="In wie vielen Minuten soll die Warteschlange starten?"
+            title=t("dlg_later_title"), 
+            text=t("dlg_later_text")
         )
         ans = dialog.get_input()
         if not ans:
@@ -353,10 +386,10 @@ class AppWindow(ctk.CTk):
                 return
             start_at = datetime.now() + timedelta(minutes=delay)
             self._queue_panel.set_controls_enabled(running=True)
-            self._log.append(f"Warteschlange geplant für {start_at.strftime('%H:%M:%S')} (in {delay} Min).")
+            self._log.append(t("log_scheduled", time=start_at.strftime('%H:%M:%S'), delay=delay))
             self._executor.start(self._queue, start_at=start_at)
         except ValueError:
-            self._log.append("Ungültige Eingabe für geplanten Start.")
+            self._log.append(t("log_scheduled_err"))
 
     # ------------------------------------------------------------------
     # Auto-update
@@ -379,20 +412,17 @@ class AppWindow(ctk.CTk):
     def _show_update_available(self, info) -> None:
         """Called on the Tk main thread when a newer release is found."""
         self._update_info = info
-        self._update_btn.configure(text=f"Update {info.tag} \u2193")
+        self._update_btn.configure(text=f"{t('update_available', tag=info.tag)} \u2193")
         self._update_btn.grid()   # make visible
-        self._log.append(
-            f"Neue Version verfuegbar: {info.tag}  "
-            f"-- Klick auf 'Update {info.tag}' zum Aktualisieren."
-        )
+        self._log.append(t("update_log", tag=info.tag))
 
     def _on_update_click(self) -> None:
         """User clicked the update button -- download and restart."""
         if not self._update_info:
             return
         info = self._update_info
-        self._update_btn.configure(state="disabled", text="Wird geladen...")
-        self._log.append(f"Update auf {info.tag} wird gestartet...")
+        self._update_btn.configure(state="disabled", text=t("update_downloading"))
+        self._log.append(t("update_started", tag=info.tag))
 
         def safe_log(msg: str) -> None:
             if self._alive:
@@ -445,9 +475,9 @@ class AppWindow(ctk.CTk):
                     image = Image.new('RGB', (64, 64), color=(73, 109, 137))
                 
                 menu = pystray.Menu(
-                    pystray.MenuItem('Anzeigen', self._tray_show),
-                    pystray.MenuItem('Stop', lambda: self.after(0, self._on_stop)),
-                    pystray.MenuItem('Beenden', self._tray_quit)
+                    pystray.MenuItem(t('tray_show'), self._tray_show),
+                    pystray.MenuItem(t('tray_stop'), lambda: self.after(0, self._on_stop)),
+                    pystray.MenuItem(t('tray_quit'), self._tray_quit)
                 )
                 self._tray_icon = pystray.Icon("AutoClickTimer", image, "AutoClickTimer", menu)
                 threading.Thread(target=self._tray_icon.run, daemon=True).start()
@@ -475,3 +505,4 @@ class AppWindow(ctk.CTk):
         # bypassing thread join -- safe for a GUI utility with no open files.
         import os
         os._exit(0)
+

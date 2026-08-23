@@ -12,7 +12,7 @@ from typing import Literal
 ActionType = Literal["enter", "click", "type", "sleep", "shutdown"]
 
 ACTION_LABELS: dict[str, str] = {
-    "enter": "Enter druecken",
+    "enter": "Enter drücken",
     "click": "Linksklick",
     "type": "Prompt senden",
     "sleep": "Sleep & Wake",

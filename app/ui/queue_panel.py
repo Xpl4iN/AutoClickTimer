@@ -10,11 +10,12 @@ Interface:
 """
 from __future__ import annotations
 
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import customtkinter as ctk
 
 from app.models import Item
+from app.ui.i18n import t, register_listener
 from app.ui.theme import (
     SURFACE, SURFACE_L, SURFACE_H, OUTLINE,
     PRIMARY, PRIMARY_HOV, ON_SURF, ON_SURF_M, ERROR, SUCCESS, WARNING,
@@ -31,19 +32,19 @@ def _phase_display(item: Item) -> Tuple[str, str, str]:
     Returns (status_text, countdown_text, countdown_color) based on item state and phase.
     """
     if item.status == "done":
-        return "Fertig", "Fertig", SUCCESS
+        return t("status_done"), t("status_done"), SUCCESS
     if item.status == "waiting":
-        return "Wartet", fmt(item.total), ON_SURF_M
+        return t("status_waiting"), fmt(item.total), ON_SURF_M
     # running
     if item.action == "sleep":
         phase_map = {
-            "grace":          ("Vorbereitung", fmt(item.rem), WARNING),
-            "sleeping":       ("Schlaeft...",  "Schlaeft...", PRIMARY),
-            "post_wake":      ("Aufgewacht",   fmt(item.rem), SUCCESS),
-            "awake_fallback": ("Wach (Fallback)", fmt(item.rem), WARNING),
+            "grace":          (t("status_grace"), fmt(item.rem), WARNING),
+            "sleeping":       (t("status_sleeping"), t("status_sleeping"), PRIMARY),
+            "post_wake":      (t("status_post_wake"), fmt(item.rem), SUCCESS),
+            "awake_fallback": (t("status_awake_fallback"), fmt(item.rem), WARNING),
         }
-        return phase_map.get(item.phase, ("Laeuft", fmt(item.rem), PRIMARY))
-    return "Laeuft", fmt(item.rem), PRIMARY
+        return phase_map.get(item.phase, (t("status_running"), fmt(item.rem), PRIMARY))
+    return t("status_running"), fmt(item.rem), PRIMARY
 
 
 def _phase_progress(item: Item) -> float:
@@ -73,16 +74,32 @@ class QueuePanel:
         self._is_running = is_running
         self._rows: List[_RowRef] = []
         self._rendering = False
+        self._current_queue: Optional[List[Item]] = None
 
         self._build_queue_area(parent)
         self._build_controls(parent, on_start, on_stop, on_reset, on_clear, on_save, on_load, on_start_later)
+        register_listener(self.retranslate)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
+    def retranslate(self, lang: str = "de") -> None:
+        self._hdr_lbl.configure(text=t("queue_header"))
+        self._empty_lbl.configure(text=t("empty_queue"))
+        self._start_btn.configure(text=t("start_btn"))
+        self._start_later_btn.configure(text=t("start_later_btn"))
+        self._stop_btn.configure(text=t("stop_btn"))
+        self._reset_btn.configure(text=t("reset_btn"))
+        self._clear_btn.configure(text=t("clear_btn"))
+        self._save_btn.configure(text=t("save_btn"))
+        self._load_btn.configure(text=t("load_btn"))
+        if self._current_queue is not None:
+            self.render(self._current_queue)
+
     def render(self, queue: List[Item]) -> None:
         """Full re-render of all queue rows. Call on structural changes."""
+        self._current_queue = queue
         if self._rendering:
             return
         self._rendering = True
@@ -155,9 +172,8 @@ class QueuePanel:
         outer.grid_rowconfigure(1, weight=1)
         outer.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(outer, text="WARTESCHLANGE", font=FONT_LABEL, text_color=ON_SURF_M).grid(
-            row=0, column=0, sticky="w", pady=(0, 4)
-        )
+        self._hdr_lbl = ctk.CTkLabel(outer, text=t("queue_header"), font=FONT_LABEL, text_color=ON_SURF_M)
+        self._hdr_lbl.grid(row=0, column=0, sticky="w", pady=(0, 4))
 
         self._scroll = ctk.CTkScrollableFrame(
             outer, fg_color=SURFACE, border_width=1, border_color=OUTLINE,
@@ -168,7 +184,7 @@ class QueuePanel:
 
         self._empty_lbl = ctk.CTkLabel(
             self._scroll,
-            text="Noch keine Aktionen -- fuege deine erste oben hinzu.",
+            text=t("empty_queue"),
             font=FONT_BODY, text_color=ON_SURF_M,
         )
         self._empty_lbl.pack(pady=32)
@@ -189,21 +205,21 @@ class QueuePanel:
         self._controls.grid_columnconfigure(5, weight=1)
 
         self._start_btn = ctk.CTkButton(
-            self._controls, text="Starten", command=on_start,
+            self._controls, text=t("start_btn"), command=on_start,
             fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
             width=80, font=FONT_BOLD, corner_radius=8,
         )
         self._start_btn.grid(row=0, column=0, padx=(0, 4))
         
         self._start_later_btn = ctk.CTkButton(
-            self._controls, text="Später...", command=on_start_later,
+            self._controls, text=t("start_later_btn"), command=on_start_later,
             fg_color=SURFACE_L, hover_color=PRIMARY_HOV, text_color=ON_SURF,
             width=70, font=FONT_BODY, corner_radius=8, border_width=1, border_color=PRIMARY,
         )
         self._start_later_btn.grid(row=0, column=1, padx=(0, 8))
 
         self._stop_btn = ctk.CTkButton(
-            self._controls, text="Stop", command=on_stop,
+            self._controls, text=t("stop_btn"), command=on_stop,
             fg_color=SURFACE, border_width=1, border_color=OUTLINE,
             hover_color=SURFACE_H, text_color=ON_SURF, width=60,
             font=FONT_BODY, corner_radius=8,
@@ -211,7 +227,7 @@ class QueuePanel:
         self._stop_btn.grid(row=0, column=2, padx=(0, 4))
 
         self._reset_btn = ctk.CTkButton(
-            self._controls, text="Reset", command=on_reset,
+            self._controls, text=t("reset_btn"), command=on_reset,
             fg_color=SURFACE, border_width=1, border_color=OUTLINE,
             hover_color=SURFACE_H, text_color=ON_SURF, width=60,
             font=FONT_BODY, corner_radius=8,
@@ -219,7 +235,7 @@ class QueuePanel:
         self._reset_btn.grid(row=0, column=3, padx=(0, 4))
 
         self._clear_btn = ctk.CTkButton(
-            self._controls, text="Leeren", command=on_clear,
+            self._controls, text=t("clear_btn"), command=on_clear,
             fg_color=SURFACE, border_width=1, border_color=OUTLINE,
             hover_color="#2e1414", text_color=ERROR, width=60,
             font=FONT_BODY, corner_radius=8,
@@ -232,14 +248,14 @@ class QueuePanel:
         self._stat.grid(row=0, column=5, sticky="ew")
         
         self._save_btn = ctk.CTkButton(
-            self._controls, text="Speichern", command=on_save,
+            self._controls, text=t("save_btn"), command=on_save,
             fg_color=SURFACE, hover_color=SURFACE_H, text_color=ON_SURF,
             width=90, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
         )
         self._save_btn.grid(row=0, column=6, padx=(8, 4))
         
         self._load_btn = ctk.CTkButton(
-            self._controls, text="Laden", command=on_load,
+            self._controls, text=t("load_btn"), command=on_load,
             fg_color=SURFACE, hover_color=SURFACE_H, text_color=ON_SURF,
             width=70, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
         )

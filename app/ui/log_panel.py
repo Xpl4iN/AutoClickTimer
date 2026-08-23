@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 import customtkinter as ctk
 
+from app.ui.i18n import t, register_listener
 from app.ui.theme import (
     SURFACE, SURFACE_L, SURFACE_H, OUTLINE, PRIMARY, PRIMARY_HOV,
     ON_SURF, ON_SURF_M, ERROR,
@@ -42,7 +43,7 @@ class LogPanel:
         # Toggle button with text and counter
         self._toggle_btn = ctk.CTkButton(
             self._header,
-            text="Log ▲",
+            text=f"{t('log_title')} ▲",
             width=70, height=26,
             font=FONT_SMALL,
             fg_color=SURFACE_L,
@@ -58,7 +59,7 @@ class LogPanel:
         # Latest message preview label
         self._preview_lbl = ctk.CTkLabel(
             self._header,
-            text="Bereit. Keine Aktionen ausgefuehrt.",
+            text=t("ready"),
             font=FONT_SMALL,
             text_color=ON_SURF_M,
             anchor="w",
@@ -68,7 +69,7 @@ class LogPanel:
         # Clear log button
         self._clear_btn = ctk.CTkButton(
             self._header,
-            text="Leeren",
+            text=t("clear_btn"),
             width=50, height=26,
             font=FONT_SMALL,
             fg_color="transparent",
@@ -98,11 +99,21 @@ class LogPanel:
         # Start collapsed by default
         self._box.grid_remove()
 
+        register_listener(self.retranslate)
+
     def grid(self, **kwargs) -> None:
         self._frame.grid(**kwargs)
 
     def grid_configure(self, **kwargs) -> None:
         self._frame.grid_configure(**kwargs)
+
+    def retranslate(self, lang: str = "de") -> None:
+        arrow = "▼" if self._is_expanded else "▲"
+        count_str = f" ({self._log_count})" if self._log_count > 0 else ""
+        self._toggle_btn.configure(text=f"{t('log_title')}{count_str} {arrow}")
+        self._clear_btn.configure(text=t("clear_btn"))
+        if self._log_count == 0:
+            self._preview_lbl.configure(text=t("ready"))
 
     def toggle(self) -> None:
         """Toggle between expanded and collapsed state."""
@@ -111,10 +122,10 @@ class LogPanel:
         count_str = f" ({self._log_count})" if self._log_count > 0 else ""
         if self._is_expanded:
             self._box.grid()
-            self._toggle_btn.configure(text=f"Log{count_str} {arrow}")
+            self._toggle_btn.configure(text=f"{t('log_title')}{count_str} {arrow}")
         else:
             self._box.grid_remove()
-            self._toggle_btn.configure(text=f"Log{count_str} {arrow}")
+            self._toggle_btn.configure(text=f"{t('log_title')}{count_str} {arrow}")
 
     def append(self, msg: str) -> None:
         """Append a timestamped line. Must be called from the Tk main thread."""
@@ -127,7 +138,7 @@ class LogPanel:
 
         # Update toggle button text with count
         arrow = "▼" if self._is_expanded else "▲"
-        self._toggle_btn.configure(text=f"Log ({self._log_count}) {arrow}")
+        self._toggle_btn.configure(text=f"{t('log_title')} ({self._log_count}) {arrow}")
 
         # Update full textbox
         self._box.configure(state="normal")
@@ -141,7 +152,7 @@ class LogPanel:
         self._box.delete("1.0", "end")
         self._box.configure(state="disabled")
         self._log_count = 0
-        self._preview_lbl.configure(text="Log geleert.")
+        self._preview_lbl.configure(text=t("log_cleared"))
         arrow = "▼" if self._is_expanded else "▲"
-        self._toggle_btn.configure(text=f"Log {arrow}")
+        self._toggle_btn.configure(text=f"{t('log_title')} {arrow}")
 
