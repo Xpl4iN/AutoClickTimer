@@ -13,3 +13,7 @@ __pycache__/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Rust standalone repo
+rust/
+
