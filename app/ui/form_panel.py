@@ -1,5 +1,5 @@
 """
-app/ui/form_panel.py -- Add-item form + preset card.
+app/ui/form_panel.py -- Add-item form + preset gallery with segmented navigation.
 
 Interface:
     FormPanel(parent, on_add)
@@ -9,9 +9,9 @@ Interface:
                            that add a sleep + action pair.
 
 Internal sub-sections (all private):
-  _build_form_card   -- mode, time inputs, action selector, prompt area,
-                        sleep config inputs, label + add button
-  _build_presets_card -- preset combination buttons
+  _build_form_card     -- mode, time inputs, action selector, prompt area,
+                          sleep config inputs, target window, label + add button
+  _build_presets_card  -- preset combination cards
 """
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ def _is_admin() -> bool:
     except Exception:
         return False
 
+
 def _get_open_windows() -> list[str]:
     import ctypes
     EnumWindows = ctypes.windll.user32.EnumWindows
@@ -47,6 +48,7 @@ def _get_open_windows() -> list[str]:
     IsWindowVisible = ctypes.windll.user32.IsWindowVisible
 
     titles = ["(Global / Aktives Fenster)"]
+
     def foreach_window(hwnd, lParam):
         if IsWindowVisible(hwnd):
             length = GetWindowTextLength(hwnd)
@@ -57,14 +59,15 @@ def _get_open_windows() -> list[str]:
                 if title and title not in titles:
                     titles.append(title)
         return True
+
     EnumWindows(EnumWindowsProc(foreach_window), 0)
     return titles
 
 
 class FormPanel:
     """
-    Left-side form card + presets card.
-    Occupies rows 0 and 1 of the left panel grid.
+    Left-side form panel with segmented navigation (Aktion erstellen / Vorlagen).
+    Occupies row 0 of the left panel grid.
     """
 
     def __init__(
@@ -85,6 +88,9 @@ class FormPanel:
         self._clk_s   = tk.StringVar(value="0")
         self._sv_lbl  = tk.StringVar()
 
+        # Action StringVar
+        self._action_val = tk.StringVar(value="Enter")
+
         # Sleep config StringVars
         self._sleep_mode  = tk.StringVar(value="duration")
         self._sv_grace_h  = tk.StringVar(value="0")
@@ -98,8 +104,59 @@ class FormPanel:
         self._target_window = tk.StringVar(value="(Global / Aktives Fenster)")
         self._require_foreground = tk.BooleanVar(value=False)
 
-        self._build_form_card(parent)
-        self._build_presets_card(parent)
+        # Preset tab StringVars
+        self._preset_mode = tk.StringVar(value="duration")
+        self._psv_h = tk.StringVar(value="0")
+        self._psv_m = tk.StringVar(value="30")
+        self._psv_s = tk.StringVar(value="0")
+        self._pclk_h = tk.StringVar(value=str((now.hour + 1) % 24))
+        self._pclk_m = tk.StringVar(value=str(now.minute))
+        self._pclk_s = tk.StringVar(value="0")
+
+        # Container
+        self._container = ctk.CTkFrame(parent, fg_color="transparent")
+        self._container.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
+        self._container.grid_columnconfigure(0, weight=1)
+        self._container.grid_rowconfigure(1, weight=1)
+
+        # ---- Tab Switcher ----
+        self._tab_switch = ctk.CTkSegmentedButton(
+            self._container,
+            values=["Aktion erstellen", "Vorlagen"],
+            command=self._on_tab_change,
+            fg_color=SURFACE,
+            selected_color=PRIMARY,
+            selected_hover_color=PRIMARY_HOV,
+            unselected_color=SURFACE_L,
+            unselected_hover_color=SURFACE_H,
+            text_color=ON_SURF,
+            font=FONT_BOLD,
+            height=32,
+            corner_radius=8,
+        )
+        self._tab_switch.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        self._tab_switch.set("Aktion erstellen")
+
+        # ---- Tab Pages ----
+        self._action_tab = ctk.CTkFrame(self._container, fg_color="transparent")
+        self._action_tab.grid(row=1, column=0, sticky="nsew")
+        self._action_tab.grid_columnconfigure(0, weight=1)
+
+        self._presets_tab = ctk.CTkFrame(self._container, fg_color="transparent")
+        self._presets_tab.grid(row=1, column=0, sticky="nsew")
+        self._presets_tab.grid_columnconfigure(0, weight=1)
+        self._presets_tab.grid_remove()
+
+        self._build_form_card(self._action_tab)
+        self._build_presets_card(self._presets_tab)
+
+    def _on_tab_change(self, selected_tab: str) -> None:
+        if selected_tab == "Aktion erstellen":
+            self._presets_tab.grid_remove()
+            self._action_tab.grid()
+        else:
+            self._action_tab.grid_remove()
+            self._presets_tab.grid()
 
     # ------------------------------------------------------------------
     # Form card
@@ -110,12 +167,12 @@ class FormPanel:
             parent, fg_color=SURFACE,
             border_width=1, border_color=OUTLINE, corner_radius=12,
         )
-        card.grid(row=0, column=0, sticky="nsew", pady=(0, 12))
+        card.grid(row=0, column=0, sticky="nsew")
         card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         # ---- Mode selector ----
         mf = ctk.CTkFrame(card, fg_color="transparent")
-        mf.grid(row=0, column=0, columnspan=4, sticky="w", padx=16, pady=(12, 6))
+        mf.grid(row=0, column=0, columnspan=4, sticky="w", padx=16, pady=(12, 4))
 
         ctk.CTkLabel(mf, text="Modus:", font=FONT_SMALL, text_color=ON_SURF_M).pack(
             side="left", padx=(0, 12)
@@ -130,55 +187,64 @@ class FormPanel:
 
         # ---- Dynamic time inputs ----
         self._inputs_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self._inputs_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
+        self._inputs_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=16, pady=4)
         self._inputs_frame.grid_columnconfigure((0, 1, 2), weight=1)
         self._render_inputs()
 
-        # ---- Action selector ----
+        # ---- Action selector (Visual Segmented Button) ----
         af = ctk.CTkFrame(card, fg_color="transparent")
-        af.grid(row=2, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
-        af.grid_columnconfigure(1, weight=1)
+        af.grid(row=2, column=0, columnspan=4, sticky="ew", padx=16, pady=(8, 4))
+        af.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(af, text="Aktion:", font=FONT_SMALL, text_color=ON_SURF_M).grid(
-            row=0, column=0, sticky="w", padx=(0, 10)
+        ctk.CTkLabel(af, text="Aktionstyp:", font=FONT_SMALL, text_color=ON_SURF_M).grid(
+            row=0, column=0, sticky="w", pady=(0, 4)
         )
-        self._act_combo = ctk.CTkComboBox(
+
+        self._act_segmented = ctk.CTkSegmentedButton(
             af,
             values=["Enter", "Linksklick", "Prompt senden", "Sleep & Wake", "Herunterfahren"],
+            variable=self._action_val,
             command=self._on_action_change,
-            fg_color=SURFACE_L, border_color=OUTLINE, text_color=ON_SURF,
-            font=FONT_BODY, width=240,
+            fg_color=SURFACE_L,
+            selected_color=PRIMARY,
+            selected_hover_color=PRIMARY_HOV,
+            unselected_color=SURFACE_L,
+            unselected_hover_color=SURFACE_H,
+            text_color=ON_SURF,
+            font=FONT_SMALL,
+            corner_radius=8,
+            height=30,
         )
-        self._act_combo.grid(row=0, column=1, sticky="w")
-        self._act_combo.set("Enter")
+        self._act_segmented.grid(row=1, column=0, sticky="ew")
+        self._act_segmented.set("Enter")
 
         # ---- Prompt text area (hidden unless "Prompt senden") ----
         self._prompt_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self._prompt_frame.grid(row=3, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
+        self._prompt_frame.grid(row=3, column=0, columnspan=4, sticky="ew", padx=16, pady=4)
         self._prompt_frame.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             self._prompt_frame,
-            text="Prompt-Text (eingefuegt + Enter gesendet)",
+            text="Prompt-Text (eingefuegt + Enter gesendet):",
             font=FONT_SMALL, text_color=ON_SURF_M,
         ).grid(row=0, column=0, sticky="w", pady=(0, 2))
         self._prompt_box = ctk.CTkTextbox(
-            self._prompt_frame, height=60,
+            self._prompt_frame, height=54,
             fg_color=SURFACE_L, border_color=OUTLINE, border_width=1,
-            text_color=ON_SURF,
+            text_color=ON_SURF, font=FONT_BODY, corner_radius=8,
         )
         self._prompt_box.grid(row=1, column=0, sticky="ew")
         self._prompt_frame.grid_remove()
 
         # ---- Sleep config inputs (hidden unless "Sleep & Wake") ----
         self._sleep_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self._sleep_frame.grid(row=4, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
+        self._sleep_frame.grid(row=4, column=0, columnspan=4, sticky="ew", padx=16, pady=4)
         self._sleep_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         ctk.CTkLabel(
             self._sleep_frame, text="Sleep-Konfiguration",
             font=FONT_LABEL, text_color=ON_SURF_M,
-        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 6))
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
         # Pre-sleep mode selector
         sm_frame = ctk.CTkFrame(self._sleep_frame, fg_color="transparent")
@@ -197,19 +263,19 @@ class FormPanel:
 
         # Dynamic inputs for pre-sleep
         self._sleep_inputs_frame = ctk.CTkFrame(self._sleep_frame, fg_color="transparent")
-        self._sleep_inputs_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(2, 6))
+        self._sleep_inputs_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(2, 4))
         self._sleep_inputs_frame.grid_columnconfigure((0, 1, 2), weight=1)
         self._render_sleep_inputs()
 
         # Post-wake delay section
         pw_section = ctk.CTkFrame(self._sleep_frame, fg_color="transparent")
-        pw_section.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(6, 0))
+        pw_section.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(4, 0))
         pw_section.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             pw_section, text="Post-Wake-Verzoegerung (Sek.):",
             font=FONT_SMALL, text_color=ON_SURF_M,
-        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
+        ).grid(row=0, column=0, sticky="w", pady=(0, 2))
 
         pw_row = ctk.CTkFrame(pw_section, fg_color="transparent")
         pw_row.grid(row=1, column=0, sticky="w")
@@ -233,14 +299,14 @@ class FormPanel:
 
         # ---- Target Window selector ----
         self._target_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self._target_frame.grid(row=5, column=0, columnspan=4, sticky="ew", padx=16, pady=6)
+        self._target_frame.grid(row=5, column=0, columnspan=4, sticky="ew", padx=16, pady=4)
         self._target_frame.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             self._target_frame, text="Ziel-Fenster (Background-Input):",
             font=FONT_SMALL, text_color=ON_SURF_M,
         ).grid(row=0, column=0, sticky="w", pady=(0, 2))
-        
+
         tw_inner = ctk.CTkFrame(self._target_frame, fg_color="transparent")
         tw_inner.grid(row=1, column=0, sticky="ew")
         tw_inner.grid_columnconfigure(0, weight=1)
@@ -251,23 +317,23 @@ class FormPanel:
             width=240,
         )
         self._window_combo.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        
+
         ctk.CTkButton(
-            tw_inner, text="↻", width=30,
+            tw_inner, text="Aktualisieren", width=85,
             command=lambda: self._window_combo.configure(values=_get_open_windows()),
             fg_color=SURFACE_L, hover_color=PRIMARY_HOV, border_width=1, border_color=OUTLINE,
-            text_color=ON_SURF, font=FONT_BODY,
+            text_color=ON_SURF, font=FONT_SMALL,
         ).grid(row=0, column=1)
 
         ctk.CTkCheckBox(
             self._target_frame, text="Zwingend in den Vordergrund holen",
             variable=self._require_foreground,
             font=FONT_SMALL, text_color=ON_SURF, fg_color=PRIMARY, hover_color=PRIMARY_HOV,
-        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=2, column=0, sticky="w", pady=(4, 0))
 
         # ---- Label selector (hidden for Sleep & Wake and Herunterfahren) ----
         self._label_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self._label_frame.grid(row=6, column=0, columnspan=4, sticky="ew", padx=16, pady=(6, 4))
+        self._label_frame.grid(row=6, column=0, columnspan=4, sticky="ew", padx=16, pady=(4, 2))
         self._label_frame.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(self._label_frame, text="Bezeichnung:", font=FONT_SMALL, text_color=ON_SURF_M).grid(
@@ -280,13 +346,13 @@ class FormPanel:
 
         # ---- Add button ----
         add_frame = ctk.CTkFrame(card, fg_color="transparent")
-        add_frame.grid(row=7, column=0, columnspan=4, sticky="ew", padx=16, pady=(4, 12))
+        add_frame.grid(row=7, column=0, columnspan=4, sticky="ew", padx=16, pady=(6, 12))
         add_frame.grid_columnconfigure(0, weight=1)
 
         ctk.CTkButton(
             add_frame, text="+ Zur Warteschlange", command=self._on_add_clicked,
             fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
-            font=FONT_BOLD, corner_radius=8,
+            font=FONT_BOLD, corner_radius=8, height=34,
         ).grid(row=0, column=0, sticky="ew")
 
     # ------------------------------------------------------------------
@@ -298,29 +364,76 @@ class FormPanel:
             parent, fg_color=SURFACE,
             border_width=1, border_color=OUTLINE, corner_radius=12,
         )
-        card.grid(row=1, column=0, sticky="ew", pady=(0, 12))
-        card.grid_columnconfigure((0, 1), weight=1)
+        card.grid(row=0, column=0, sticky="nsew")
+        card.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            card, text="PRESETS (Zeit oben eintragen)",
+            card, text="SCHNELL-VORLAGEN",
             font=FONT_LABEL, text_color=ON_SURF_M,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(10, 4))
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
+
+        # Preset 1: Sleep & Wake + Enter
+        p1 = ctk.CTkFrame(card, fg_color=SURFACE_L, border_width=1, border_color=OUTLINE, corner_radius=10)
+        p1.grid(row=1, column=0, sticky="ew", padx=16, pady=6)
+        p1.grid_columnconfigure(0, weight=1)
+
+        p1_info = ctk.CTkFrame(p1, fg_color="transparent")
+        p1_info.grid(row=0, column=0, sticky="w", padx=12, pady=10)
+        ctk.CTkLabel(p1_info, text="Sleep & Wake + Enter", font=FONT_BOLD, text_color=ON_SURF).pack(anchor="w")
+        ctk.CTkLabel(
+            p1_info,
+            text="Rechner in Ruhezustand versetzen und zur Zielzeit mit Enter wecken.",
+            font=FONT_SMALL, text_color=ON_SURF_M, wraplength=220, justify="left",
+        ).pack(anchor="w", pady=(2, 0))
 
         ctk.CTkButton(
-            card, text="Sleep & Wake + Enter",
+            p1, text="+ Hinzufuegen", width=95, height=30,
             command=lambda: self._add_preset_combination("enter"),
-            fg_color=SURFACE_L, hover_color=PRIMARY_HOV,
-            border_width=1, border_color=OUTLINE,
-            text_color=ON_SURF, font=FONT_BODY,
-        ).grid(row=1, column=0, padx=(16, 6), pady=(0, 12), sticky="ew")
+            fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
+            font=FONT_BOLD, corner_radius=6,
+        ).grid(row=0, column=1, padx=12, pady=10, sticky="e")
+
+        # Preset 2: Sleep & Wake + Klick
+        p2 = ctk.CTkFrame(card, fg_color=SURFACE_L, border_width=1, border_color=OUTLINE, corner_radius=10)
+        p2.grid(row=2, column=0, sticky="ew", padx=16, pady=6)
+        p2.grid_columnconfigure(0, weight=1)
+
+        p2_info = ctk.CTkFrame(p2, fg_color="transparent")
+        p2_info.grid(row=0, column=0, sticky="w", padx=12, pady=10)
+        ctk.CTkLabel(p2_info, text="Sleep & Wake + Linksklick", font=FONT_BOLD, text_color=ON_SURF).pack(anchor="w")
+        ctk.CTkLabel(
+            p2_info,
+            text="Rechner in Ruhezustand versetzen und zur Zielzeit mit Klick wecken.",
+            font=FONT_SMALL, text_color=ON_SURF_M, wraplength=220, justify="left",
+        ).pack(anchor="w", pady=(2, 0))
 
         ctk.CTkButton(
-            card, text="Sleep & Wake + Klick",
+            p2, text="+ Hinzufuegen", width=95, height=30,
             command=lambda: self._add_preset_combination("click"),
-            fg_color=SURFACE_L, hover_color=PRIMARY_HOV,
-            border_width=1, border_color=OUTLINE,
-            text_color=ON_SURF, font=FONT_BODY,
-        ).grid(row=1, column=1, padx=(6, 16), pady=(0, 12), sticky="ew")
+            fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
+            font=FONT_BOLD, corner_radius=6,
+        ).grid(row=0, column=1, padx=12, pady=10, sticky="e")
+
+        # Preset 3: Timer + Herunterfahren
+        p3 = ctk.CTkFrame(card, fg_color=SURFACE_L, border_width=1, border_color=OUTLINE, corner_radius=10)
+        p3.grid(row=3, column=0, sticky="ew", padx=16, pady=(6, 14))
+        p3.grid_columnconfigure(0, weight=1)
+
+        p3_info = ctk.CTkFrame(p3, fg_color="transparent")
+        p3_info.grid(row=0, column=0, sticky="w", padx=12, pady=10)
+        ctk.CTkLabel(p3_info, text="Timer + Herunterfahren", font=FONT_BOLD, text_color=ON_SURF).pack(anchor="w")
+        ctk.CTkLabel(
+            p3_info,
+            text="Rechner nach Ablauf der eingestellten Zeit vollstaendig herunterfahren.",
+            font=FONT_SMALL, text_color=ON_SURF_M, wraplength=220, justify="left",
+        ).pack(anchor="w", pady=(2, 0))
+
+        ctk.CTkButton(
+            p3, text="+ Hinzufuegen", width=95, height=30,
+            command=lambda: self._add_preset_combination("shutdown"),
+            fg_color=PRIMARY, hover_color=PRIMARY_HOV, text_color="white",
+            font=FONT_BOLD, corner_radius=6,
+        ).grid(row=0, column=1, padx=12, pady=10, sticky="e")
 
     # ------------------------------------------------------------------
     # Time input rendering
@@ -370,7 +483,7 @@ class FormPanel:
 
         # ---- Quick time presets row ----
         pf = ctk.CTkFrame(self._inputs_frame, fg_color="transparent")
-        pf.grid(row=pr_row, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        pf.grid(row=pr_row, column=0, columnspan=4, sticky="ew", pady=(6, 0))
         pf.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
 
         presets = [
@@ -436,7 +549,7 @@ class FormPanel:
 
         # ---- Quick time presets row for pre-sleep ----
         pf = ctk.CTkFrame(self._sleep_inputs_frame, fg_color="transparent")
-        pf.grid(row=pr_row, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        pf.grid(row=pr_row, column=0, columnspan=3, sticky="ew", pady=(6, 0))
         pf.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
 
         presets = [
@@ -580,9 +693,14 @@ class FormPanel:
         self._prompt_box.delete("1.0", tk.END)
         self._on_add(item)
 
-    def _add_preset_combination(self, post_action: str) -> None:
+    def _add_preset_combination(self, preset_type: str) -> None:
         total = self._get_total_seconds()
         if total is None:
+            return
+
+        if preset_type == "shutdown":
+            shutdown_item = Item(total, "shutdown", label="Herunterfahren")
+            self._on_add(shutdown_item)
             return
 
         if not _is_admin():
@@ -597,9 +715,9 @@ class FormPanel:
         sleep_item = Item(total, "sleep", sleep_cfg=sleep_cfg, label="Ruhezustand")
 
         post_label = (
-            "Enter nach Aufwachen" if post_action == "enter" else "Linksklick nach Aufwachen"
+            "Enter nach Aufwachen" if preset_type == "enter" else "Linksklick nach Aufwachen"
         )
-        post_item = Item(2, post_action, label=post_label)  # type: ignore[arg-type]
+        post_item = Item(2, preset_type, label=post_label)  # type: ignore[arg-type]
 
         self._on_add(sleep_item)
         self._on_add(post_item)
@@ -675,7 +793,7 @@ class FormPanel:
             "Sleep & Wake": "sleep",
             "Herunterfahren": "shutdown",
         }
-        action = action_map.get(self._act_combo.get(), "enter")
+        action = action_map.get(self._action_val.get(), "enter")
 
         if action == "sleep" and not _is_admin():
             messagebox.showerror(
@@ -692,7 +810,7 @@ class FormPanel:
                 return None
 
         sleep_cfg = self._get_sleep_config() if action == "sleep" else SleepConfig()
-        
+
         tw = self._target_window.get()
         if tw == "(Global / Aktives Fenster)":
             tw = ""

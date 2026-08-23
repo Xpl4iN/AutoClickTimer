@@ -232,16 +232,16 @@ class QueuePanel:
         self._stat.grid(row=0, column=5, sticky="ew")
         
         self._save_btn = ctk.CTkButton(
-            self._controls, text="💾 Speichern", command=on_save,
+            self._controls, text="Speichern", command=on_save,
             fg_color=SURFACE, hover_color=SURFACE_H, text_color=ON_SURF,
-            width=100, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
+            width=90, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
         )
         self._save_btn.grid(row=0, column=6, padx=(8, 4))
         
         self._load_btn = ctk.CTkButton(
-            self._controls, text="📂 Laden", command=on_load,
+            self._controls, text="Laden", command=on_load,
             fg_color=SURFACE, hover_color=SURFACE_H, text_color=ON_SURF,
-            width=80, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
+            width=70, font=FONT_BODY, corner_radius=8, border_width=1, border_color=OUTLINE,
         )
         self._load_btn.grid(row=0, column=7)
 

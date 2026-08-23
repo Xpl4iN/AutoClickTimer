@@ -95,7 +95,7 @@ class AppWindow(ctk.CTk):
         
         self._caffeine_var = ctk.BooleanVar(value=False)
         self._caffeine_switch = ctk.CTkSwitch(
-            self._hdr, text="☕ Caffeine", variable=self._caffeine_var,
+            self._hdr, text="Caffeine", variable=self._caffeine_var,
             font=FONT_SMALL, text_color=ON_SURF, command=self._on_caffeine_toggle
         )
         self._caffeine_switch.grid(row=0, column=2, padx=(12, 12), sticky="e")
@@ -112,13 +112,12 @@ class AppWindow(ctk.CTk):
         self._left = ctk.CTkFrame(self, fg_color="transparent")
         self._left.grid(row=1, column=0, sticky="nsew", padx=(20, 10), pady=(10, 16))
         self._left.grid_columnconfigure(0, weight=1)
-        self._left.grid_rowconfigure(0, weight=0)
+        self._left.grid_rowconfigure(0, weight=1)
         self._left.grid_rowconfigure(1, weight=0)
-        self._left.grid_rowconfigure(2, weight=1)
 
         self._form = FormPanel(self._left, on_add=self._on_add)
         self._log  = LogPanel(self._left)
-        self._log.grid(row=2, column=0, sticky="nsew")
+        self._log.grid(row=1, column=0, sticky="ew")
 
         # Right panel
         self._right = ctk.CTkFrame(self, fg_color="transparent")
@@ -168,7 +167,8 @@ class AppWindow(ctk.CTk):
 
             self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=16, pady=(10, 6))
             self._right.grid_configure(row=2, column=0, columnspan=1, sticky="nsew", padx=16, pady=(6, 16))
-            self._left.grid_rowconfigure(2, weight=0)
+            self._left.grid_rowconfigure(0, weight=0)
+            self._left.grid_rowconfigure(1, weight=0)
             self._queue_panel.configure_slim()
         else:
             self.grid_rowconfigure(1, weight=1)
@@ -182,7 +182,8 @@ class AppWindow(ctk.CTk):
 
             self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=(20, 10), pady=(10, 16))
             self._right.grid_configure(row=1, column=1, columnspan=1, sticky="nsew", padx=(10, 20), pady=(10, 16))
-            self._left.grid_rowconfigure(2, weight=1)
+            self._left.grid_rowconfigure(0, weight=1)
+            self._left.grid_rowconfigure(1, weight=0)
             self._queue_panel.configure_wide()
 
     # ------------------------------------------------------------------
@@ -290,7 +291,7 @@ class AppWindow(ctk.CTk):
         active = self._caffeine_var.get()
         self._executor.set_caffeine(active)
         if active:
-            self._log.append("☕ Caffeine Mode aktiviert (Anti-Lock).")
+            self._log.append("Caffeine Mode aktiviert (Anti-Lock).")
         else:
             self._log.append("Caffeine Mode deaktiviert.")
 
