@@ -10,6 +10,7 @@ AutoClick Timer is a modern, responsive automation utility built with Python and
 - **Combo Presets:** One-click scheduling for common combinations like *Sleep & Wake + Enter*.
 - **Responsive Layout:** Stacks panels vertically to run as a slim sidebar window (down to 380px width) or side-by-side as a wide dashboard.
 - **Sleep & Wake Automation:** Automatically configures Windows RTC wake timers, disables unattended sleep timeouts, registers a SYSTEM-level scheduled task to wake and unlock your session, and suspends the PC.
+- **Power and Lid Controls:** Configure lid-close and power-button behavior independently for plugged-in and battery use, plus display timeout settings for remote access workflows.
 - **Emergency Failsafe:** Instantly stops the active queue by moving your mouse cursor to the top-left corner of the monitor screen (coordinate 0,0).
 
 ## Requirements

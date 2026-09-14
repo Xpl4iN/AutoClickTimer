@@ -1,3 +1,3 @@
 """app/version.py -- Single source of truth for version and repo."""
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 REPO    = "Xpl4iN/AutoClickTimer"

@@ -23,6 +23,7 @@ from app.models import Item
 from app.ui.form_panel import FormPanel
 from app.ui.log_panel import LogPanel
 from app.ui.queue_panel import QueuePanel
+from app.ui.power_dialog import PowerSettingsDialog
 from app.ui.i18n import t, set_language, get_language, register_listener
 from app.ui.theme import (
     BG_COLOR, SURFACE, SURFACE_L, SURFACE_H, OUTLINE, PRIMARY, PRIMARY_HOV,
@@ -82,7 +83,8 @@ class AppWindow(ctk.CTk):
         self._hdr.grid_columnconfigure(1, weight=1)
         self._hdr.grid_columnconfigure(2, weight=0)  # caffeine switch
         self._hdr.grid_columnconfigure(3, weight=0)  # lang pill
-        self._hdr.grid_columnconfigure(4, weight=0)  # update button column
+        self._hdr.grid_columnconfigure(4, weight=0)  # power settings column
+        self._hdr.grid_columnconfigure(5, weight=0)  # update button column
 
         self._title_lbl = ctk.CTkLabel(
             self._hdr, text=f"AutoClick Timer  v{VERSION}", font=FONT_TITLE, text_color=ON_SURF
@@ -97,7 +99,7 @@ class AppWindow(ctk.CTk):
             corner_radius=8, width=120,
             command=self._on_update_click,
         )
-        self._update_btn.grid(row=0, column=4, padx=(8, 0))
+        self._update_btn.grid(row=0, column=5, padx=(8, 0))
         self._update_btn.grid_remove()   # hidden until update found
         
         self._caffeine_var = ctk.BooleanVar(value=False)
@@ -106,6 +108,22 @@ class AppWindow(ctk.CTk):
             font=FONT_SMALL, text_color=ON_SURF, command=self._on_caffeine_toggle
         )
         self._caffeine_switch.grid(row=0, column=2, padx=(10, 8), sticky="e")
+
+        self._power_btn = ctk.CTkButton(
+            self._hdr,
+            text=t("power_button"),
+            command=self._open_power_settings,
+            fg_color=SURFACE,
+            hover_color=SURFACE_H,
+            border_width=1,
+            border_color=OUTLINE,
+            text_color=ON_SURF,
+            font=FONT_SMALL,
+            corner_radius=8,
+            width=68,
+            height=28,
+        )
+        self._power_btn.grid(row=0, column=4, padx=(4, 0), sticky="e")
 
         # Language Switcher Pill [ DE | EN ]
         self._lang_pill = ctk.CTkSegmentedButton(
@@ -169,6 +187,7 @@ class AppWindow(ctk.CTk):
     def retranslate(self, lang: str = "de") -> None:
         self._failsafe_lbl.configure(text=t("failsafe_tip"))
         self._caffeine_switch.configure(text=t("caffeine"))
+        self._power_btn.configure(text=t("power_button"))
         if self._update_info:
             self._update_btn.configure(text=t("update_available", tag=self._update_info.tag))
 
@@ -197,6 +216,7 @@ class AppWindow(ctk.CTk):
             self._hdr.grid_configure(columnspan=1)
             self._title_lbl.grid_configure(row=0, column=0, sticky="w")
             self._failsafe_lbl.grid_configure(row=1, column=0, columnspan=4, sticky="w", padx=0, pady=(2, 0))
+            self._power_btn.grid_configure(row=1, column=4, padx=(4, 0), sticky="e")
 
             self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=16, pady=(10, 6))
             self._right.grid_configure(row=2, column=0, columnspan=1, sticky="nsew", padx=16, pady=(6, 16))
@@ -212,6 +232,7 @@ class AppWindow(ctk.CTk):
             self._hdr.grid_configure(columnspan=2)
             self._title_lbl.grid_configure(row=0, column=0, sticky="w")
             self._failsafe_lbl.grid_configure(row=0, column=1, columnspan=1, sticky="e", padx=(12, 12), pady=0)
+            self._power_btn.grid_configure(row=0, column=4, padx=(4, 0), sticky="e")
 
             self._left.grid_configure(row=1, column=0, columnspan=1, sticky="nsew", padx=(20, 10), pady=(10, 16))
             self._right.grid_configure(row=1, column=1, columnspan=1, sticky="nsew", padx=(10, 20), pady=(10, 16))
@@ -327,6 +348,20 @@ class AppWindow(ctk.CTk):
             self._log.append(t("log_caffeine_on"))
         else:
             self._log.append(t("log_caffeine_off"))
+
+    def _open_power_settings(self) -> None:
+        if getattr(self, "_power_dialog", None) is not None:
+            try:
+                if self._power_dialog.winfo_exists():
+                    self._power_dialog.focus_force()
+                    return
+            except Exception:
+                pass
+
+        self._power_dialog = PowerSettingsDialog(
+            self,
+            on_applied=lambda: self._log.append(t("power_applied")),
+        )
 
     def _on_save(self) -> None:
         import json
@@ -505,4 +540,3 @@ class AppWindow(ctk.CTk):
         # bypassing thread join -- safe for a GUI utility with no open files.
         import os
         os._exit(0)
-
