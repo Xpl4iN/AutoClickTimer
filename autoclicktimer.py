@@ -5,6 +5,8 @@ AutoClick Timer -- entry point.
 Installs missing dependencies, requests administrator privileges (required
 for the Sleep & Wake scheduled-task feature), then launches the UI.
 """
+from __future__ import annotations
+
 import sys
 import subprocess
 import os
@@ -44,13 +46,29 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-_ensure_deps()
-_elevate()
+def main(argv: list[str] | None = None) -> int:
+    """Run the GUI, or control an existing GUI through the CLI."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] in ("--cli", "cli"):
+        from app.cli import run
 
-import customtkinter as ctk  # noqa: E402
-from app.ui.app_window import AppWindow  # noqa: E402
+        return run(args[1:])
+    if args and args[0] == "--mcp":
+        from app.mcp_stdio import run
 
-if __name__ == "__main__":
+        return run()
+
+    _ensure_deps()
+    _elevate()
+
+    import customtkinter as ctk
+    from app.ui.app_window import AppWindow
+
     ctk.set_appearance_mode("dark")
     app = AppWindow()
     app.mainloop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -153,12 +153,16 @@ class QueuePanel:
             self._start_btn.configure(state="disabled")
             self._start_later_btn.configure(state="disabled")
             self._stop_btn.configure(state="normal")
+            self._reset_btn.configure(state="disabled")
+            self._clear_btn.configure(state="disabled")
             self._save_btn.configure(state="disabled")
             self._load_btn.configure(state="disabled")
         else:
             self._start_btn.configure(state="normal")
             self._start_later_btn.configure(state="normal")
             self._stop_btn.configure(state="normal")
+            self._reset_btn.configure(state="normal")
+            self._clear_btn.configure(state="normal")
             self._save_btn.configure(state="normal")
             self._load_btn.configure(state="normal")
 

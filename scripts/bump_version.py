@@ -1,9 +1,17 @@
 import re
 import os
+import argparse
 
 VERSION_FILE = os.path.join(os.path.dirname(__file__), '..', 'app', 'version.py')
 
 def main():
+    parser = argparse.ArgumentParser(description="Bump app/version.py")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--major", action="store_true", help="increment the major version")
+    group.add_argument("--minor", action="store_true", help="increment the minor version")
+    group.add_argument("--patch", action="store_true", help="increment the patch version")
+    args = parser.parse_args()
+
     if not os.path.exists(VERSION_FILE):
         print(f"Error: {VERSION_FILE} not found.")
         return
@@ -18,8 +26,12 @@ def main():
         return
 
     major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
-    new_patch = patch + 1
-    new_version = f'{major}.{minor}.{new_patch}'
+    if args.major:
+        new_version = f'{major + 1}.0.0'
+    elif args.minor:
+        new_version = f'{major}.{minor + 1}.0'
+    else:
+        new_version = f'{major}.{minor}.{patch + 1}'
 
     # Replace the old version with the new version
     new_content = content.replace(f'VERSION = "{major}.{minor}.{patch}"', f'VERSION = "{new_version}"')

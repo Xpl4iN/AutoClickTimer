@@ -15,7 +15,8 @@ STRINGS = {
     "de": {
         # App Header
         "app_title": "AutoClick Timer",
-        "failsafe_tip": "Notfall-Stop: Maus ganz oben-links in die Bildschirmecke schieben",
+        "failsafe_tip": "Stop: Schaltfläche oder Strg+Umschalt+F12 verwenden. Die Bildschirmecke löst keinen Stop aus.",
+        "control_ready": "CLI/MCP: {endpoint}",
         "caffeine": "Caffeine",
         "update_available": "Update {tag} verfügbar",
         "update_downloading": "Wird geladen...",
@@ -31,6 +32,7 @@ STRINGS = {
         "power_button_label": "Beim Drücken des Einschaltknopfs",
         "lid_label": "Beim Schließen des Deckels",
         "display_timeout_label": "Bildschirm ausschalten nach",
+        "sleep_timeout_label": "PC in den Energiesparmodus nach",
         "power_action_do_nothing": "Nichts unternehmen",
         "power_action_sleep": "Energiesparmodus",
         "power_action_hibernate": "Ruhezustand",
@@ -42,6 +44,9 @@ STRINGS = {
         "timeout_15_min": "15 Minuten",
         "timeout_30_min": "30 Minuten",
         "timeout_60_min": "60 Minuten",
+        "timeout_120_min": "2 Stunden",
+        "timeout_240_min": "4 Stunden",
+        "timeout_480_min": "8 Stunden",
         "power_remote_hint": "Für Fernzugriff: Wähle beim Schließen des Deckels Nichts unternehmen und stelle eine Bildschirmabschaltung ein. Der PC bleibt für Fernverbindungen wach, während der Bildschirm ausgehen kann.",
         "power_apply": "Einstellungen anwenden",
         "power_applied": "Energieeinstellungen angewendet.",
@@ -149,6 +154,9 @@ STRINGS = {
         "log_item_added": "+ [{label}] {total}s hinzugefügt.",
         "log_scheduled": "Warteschlange geplant für {time} (in {delay} Min).",
         "log_scheduled_err": "Ungültige Eingabe für geplanten Start.",
+        "log_control_ready": "Fernsteuerung aktiv: {endpoint}",
+        "log_remote_action": "{source}: {action}",
+        "log_remote_error": "Fernsteuerung abgelehnt: {err}",
 
         # Schedule Dialog
         "dlg_later_title": "Später starten",
@@ -166,7 +174,8 @@ STRINGS = {
     "en": {
         # App Header
         "app_title": "AutoClick Timer",
-        "failsafe_tip": "Emergency Stop: Move mouse to the top-left screen corner",
+        "failsafe_tip": "Stop: Use the button or Ctrl+Shift+F12. The screen corner no longer stops the queue.",
+        "control_ready": "CLI/MCP: {endpoint}",
         "caffeine": "Caffeine",
         "update_available": "Update {tag} available",
         "update_downloading": "Downloading...",
@@ -182,6 +191,7 @@ STRINGS = {
         "power_button_label": "Pressing the power button will make my PC",
         "lid_label": "Closing the lid will make my PC",
         "display_timeout_label": "Turn off the display after",
+        "sleep_timeout_label": "Put the PC to sleep after",
         "power_action_do_nothing": "Do nothing",
         "power_action_sleep": "Sleep",
         "power_action_hibernate": "Hibernate",
@@ -193,6 +203,9 @@ STRINGS = {
         "timeout_15_min": "15 minutes",
         "timeout_30_min": "30 minutes",
         "timeout_60_min": "60 minutes",
+        "timeout_120_min": "2 hours",
+        "timeout_240_min": "4 hours",
+        "timeout_480_min": "8 hours",
         "power_remote_hint": "Remote access: choose Do nothing for lid close, then set a display timeout. The computer remains awake for remote connections while its display can turn off.",
         "power_apply": "Apply settings",
         "power_applied": "Power settings applied.",
@@ -300,6 +313,9 @@ STRINGS = {
         "log_item_added": "+ [{label}] {total}s added.",
         "log_scheduled": "Queue scheduled for {time} (in {delay} min).",
         "log_scheduled_err": "Invalid input for scheduled start.",
+        "log_control_ready": "Remote control ready: {endpoint}",
+        "log_remote_action": "{source}: {action}",
+        "log_remote_error": "Remote control rejected: {err}",
 
         # Schedule Dialog
         "dlg_later_title": "Start Later",

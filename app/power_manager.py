@@ -29,12 +29,26 @@ DISPLAY_TIMEOUTS: dict[str, int] = {
     "60_min": 3600,
 }
 
+SLEEP_TIMEOUTS: dict[str, int] = {
+    "never": 0,
+    "1_min": 60,
+    "5_min": 300,
+    "10_min": 600,
+    "15_min": 900,
+    "30_min": 1800,
+    "60_min": 3600,
+    "120_min": 7200,
+    "240_min": 14400,
+    "480_min": 28800,
+}
+
 
 @dataclass
 class PowerSourceSettings:
     lid_action: str = "sleep"
     power_button_action: str = "sleep"
     display_timeout: str = "15_min"
+    sleep_timeout: str = "30_min"
 
 
 @dataclass
@@ -48,12 +62,13 @@ class PowerSettingsError(RuntimeError):
 
 
 class PowerManager:
-    """Read and write lid, power-button, and display timeout settings."""
+    """Read and write lid, button, display, and idle-sleep settings."""
 
     _SETTING_PATHS = {
         "lid_action": ("SUB_BUTTONS", "LIDACTION"),
         "power_button_action": ("SUB_BUTTONS", "PBUTTONACTION"),
         "display_timeout": ("SUB_VIDEO", "VIDEOIDLE"),
+        "sleep_timeout": ("SUB_SLEEP", "STANDBYIDLE"),
     }
 
     def read_settings(self) -> PowerSettings:
@@ -69,9 +84,12 @@ class PowerManager:
                 ("lid_action", values.lid_action),
                 ("power_button_action", values.power_button_action),
                 ("display_timeout", values.display_timeout),
+                ("sleep_timeout", values.sleep_timeout),
             ):
                 if key == "display_timeout":
                     numeric_value = DISPLAY_TIMEOUTS.get(value)
+                elif key == "sleep_timeout":
+                    numeric_value = SLEEP_TIMEOUTS.get(value)
                 else:
                     numeric_value = ACTION_VALUES.get(value)
                 if numeric_value is None:
@@ -109,6 +127,8 @@ class PowerManager:
 
             if key == "display_timeout":
                 values[key] = self._timeout_key(raw_value)
+            elif key == "sleep_timeout":
+                values[key] = self._sleep_timeout_key(raw_value)
             else:
                 values[key] = self._action_key(raw_value)
 
@@ -159,6 +179,54 @@ class PowerManager:
             return "15_min"
         if value <= 1800:
             return "30_min"
+        return "60_min"
+
+    @staticmethod
+    def _sleep_timeout_key(value: int) -> str:
+        for key, numeric_value in SLEEP_TIMEOUTS.items():
+            if value == numeric_value:
+                return key
+        if value <= 60:
+            return "1_min"
+        if value <= 300:
+            return "5_min"
+        if value <= 600:
+            return "10_min"
+        if value <= 900:
+            return "15_min"
+        if value <= 1800:
+            return "30_min"
+        if value <= 3600:
+            return "60_min"
+        if value <= 7200:
+            return "120_min"
+        if value <= 14400:
+            return "240_min"
+        return "480_min"
+
+    @staticmethod
+    def timeout_key(minutes: int) -> str:
+        """Convert a CLI/API minute value to a supported sleep timeout key."""
+        minutes = int(minutes)
+        if minutes < 0:
+            raise ValueError("timeout minutes must not be negative")
+        seconds = minutes * 60
+        if seconds == 0:
+            return "never"
+        return PowerManager._sleep_timeout_key(seconds)
+
+    @staticmethod
+    def display_timeout_key(minutes: int) -> str:
+        """Convert a CLI/API minute value to a supported display timeout key."""
+        minutes = int(minutes)
+        if minutes < 0:
+            raise ValueError("timeout minutes must not be negative")
+        seconds = minutes * 60
+        if seconds == 0:
+            return "never"
+        for key, value in DISPLAY_TIMEOUTS.items():
+            if seconds <= value:
+                return key
         return "60_min"
 
     @staticmethod

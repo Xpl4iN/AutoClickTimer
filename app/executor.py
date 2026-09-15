@@ -27,6 +27,12 @@ from app.sleep_manager import SleepManager, MAX_RETRIES as SLEEP_MAX_RETRIES
 
 MAX_ACTION_RETRIES = 3
 _ACTION_RETRY_DELAY = 1.0   # seconds between action retries
+STOP_HOTKEY = "Ctrl+Shift+F12"
+
+# RustDesk and similar remote desktop clients can briefly place the pointer at
+# (0, 0) while connecting. That is not an intentional stop request, so the
+# pyautogui corner failsafe is disabled and replaced with an explicit hotkey.
+pyautogui.FAILSAFE = False
 
 
 def _fmt(seconds: int) -> str:
@@ -55,6 +61,7 @@ class QueueExecutor:
         self._cb = callbacks
         self._stop_ev = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._start_at: Optional[datetime.datetime] = None
         self._sleep_mgr = SleepManager(callbacks.on_log)
         
         self._caffeine_active = False
@@ -92,12 +99,17 @@ class QueueExecutor:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
+    @property
+    def scheduled_start_at(self) -> Optional[datetime.datetime]:
+        return self._start_at if self.running else None
+
     def start(self, queue: List[Item], start_at: Optional[datetime.datetime] = None) -> None:
         if self.running:
             return
         for item in queue:
             item.reset()
         self._stop_ev.clear()
+        self._start_at = start_at
         self._thread = threading.Thread(
             target=self._run, args=(list(queue), start_at), daemon=True
         )
@@ -107,6 +119,16 @@ class QueueExecutor:
         """Signal the worker to stop at the next cancellation checkpoint."""
         self._stop_ev.set()
 
+    def _checkpoint(self) -> bool:
+        """Check cancellation and the explicit emergency-stop hotkey."""
+        if self._stop_ev.is_set():
+            return True
+        if _stop_hotkey_pressed():
+            self._stop_ev.set()
+            self._cb.on_log(f"Stop-Hotkey {STOP_HOTKEY} erkannt.")
+            return True
+        return False
+
     # ------------------------------------------------------------------
     # Worker
     # ------------------------------------------------------------------
@@ -115,11 +137,11 @@ class QueueExecutor:
         try:
             if start_at:
                 while datetime.datetime.now() < start_at:
-                    if self._stop_ev.wait(0.4):
-                        return
+                    if self._stop_ev.wait(0.4) or self._checkpoint():
+                        break
                     
             for i, item in enumerate(queue):
-                if self._stop_ev.is_set():
+                if self._checkpoint():
                     break
 
                 item.status = "running"
@@ -135,7 +157,7 @@ class QueueExecutor:
                     if completed:
                         self._dispatch_with_retry(item)
 
-                if self._stop_ev.is_set():
+                if self._checkpoint():
                     break
 
                 item.rem = 0
@@ -152,6 +174,7 @@ class QueueExecutor:
             self._cb.on_all_done(len(queue))
         else:
             self._cb.on_stopped()
+        self._start_at = None
 
     # ------------------------------------------------------------------
     # Sleep item handler
@@ -225,7 +248,7 @@ class QueueExecutor:
         Returns True if completed, False if stop_ev fired.
         """
         t0 = time.monotonic()
-        while not self._stop_ev.is_set():
+        while not self._checkpoint():
             elapsed = time.monotonic() - t0
             item.rem = max(0, duration - int(elapsed))
             self._cb.on_tick(item)
@@ -245,6 +268,8 @@ class QueueExecutor:
         Propagates FailSafeException without retrying.
         """
         for attempt in range(1, MAX_ACTION_RETRIES + 1):
+            if self._checkpoint():
+                return
             try:
                 _dispatch_action(item)
                 self._cb.on_log(f"  -> Aktion '{item.action}' ausgefuehrt.")
@@ -256,7 +281,8 @@ class QueueExecutor:
                     f"  WARNUNG Aktions-Versuch {attempt}/{MAX_ACTION_RETRIES} fehlgeschlagen: {exc}"
                 )
                 if attempt < MAX_ACTION_RETRIES:
-                    time.sleep(_ACTION_RETRY_DELAY)
+                    if self._stop_ev.wait(_ACTION_RETRY_DELAY):
+                        return
 
         self._cb.on_log(
             f"  FEHLER Aktion nach {MAX_ACTION_RETRIES} Versuchen nicht ausfuehrbar -- uebersprungen."
@@ -345,3 +371,17 @@ def _dispatch_action(item: Item) -> None:
         time.sleep(0.2)
         import ctypes
         ctypes.windll.user32.SetForegroundWindow(prev_hwnd)
+
+
+def _stop_hotkey_pressed() -> bool:
+    """Return true while Ctrl+Shift+F12 is held on Windows."""
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        return all(
+            user32.GetAsyncKeyState(vk) & 0x8000
+            for vk in (0x11, 0x10, 0x7B)  # Ctrl, Shift, F12
+        )
+    except (AttributeError, OSError):
+        return False

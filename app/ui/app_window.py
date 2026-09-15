@@ -14,12 +14,16 @@ from __future__ import annotations
 import os
 import sys
 import threading
+from dataclasses import asdict
+from datetime import datetime, timedelta
 from typing import List
 
 import customtkinter as ctk
 
 from app.executor import ExecutorCallbacks, QueueExecutor
 from app.models import Item
+from app.control_server import ControlServer
+from app.power_manager import PowerManager, PowerSettings, PowerSourceSettings
 from app.ui.form_panel import FormPanel
 from app.ui.log_panel import LogPanel
 from app.ui.queue_panel import QueuePanel
@@ -46,12 +50,16 @@ class AppWindow(ctk.CTk):
         self._queue: List[Item] = []
         self._alive = True   # set to False in _on_close; guards safe() callbacks
         self._update_info = None
+        self._ui_thread = threading.current_thread()
 
         # ---- Build executor (no queue yet) ----
         self._executor = QueueExecutor(self._make_callbacks())
 
         # ---- Build UI ----
         self._build_layout()
+        self._control_server = ControlServer(self._handle_control_request)
+        endpoint = self._control_server.start()
+        self._log.append(t("log_control_ready", endpoint=endpoint))
 
         # ---- Window events ----
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -314,11 +322,15 @@ class AppWindow(ctk.CTk):
         self._queue_panel.render(self._queue)
 
     def _on_start(self) -> None:
+        self._start_queue()
+
+    def _start_queue(self, start_at: datetime | None = None) -> bool:
         if self._executor.running or not self._queue:
-            return
+            return False
         self._queue_panel.set_controls_enabled(running=True)
         self._log.append(t("log_queue_started"))
-        self._executor.start(self._queue)
+        self._executor.start(self._queue, start_at=start_at)
+        return True
 
     def _on_stop(self) -> None:
         self._executor.stop()
@@ -327,6 +339,7 @@ class AppWindow(ctk.CTk):
     def _on_reset(self) -> None:
         if self._executor.running:
             self._executor.stop()
+            return
         for item in self._queue:
             item.reset()
         self._queue_panel.render(self._queue)
@@ -336,6 +349,7 @@ class AppWindow(ctk.CTk):
     def _on_clear(self) -> None:
         if self._executor.running:
             self._executor.stop()
+            return
         self._queue.clear()
         self._queue_panel.render(self._queue)
         self._queue_panel.set_status("")
@@ -406,8 +420,6 @@ class AppWindow(ctk.CTk):
     def _on_start_later(self) -> None:
         if self._executor.running or not self._queue:
             return
-        from datetime import datetime, timedelta
-        
         dialog = ctk.CTkInputDialog(
             title=t("dlg_later_title"), 
             text=t("dlg_later_text")
@@ -420,11 +432,150 @@ class AppWindow(ctk.CTk):
             if delay <= 0:
                 return
             start_at = datetime.now() + timedelta(minutes=delay)
-            self._queue_panel.set_controls_enabled(running=True)
             self._log.append(t("log_scheduled", time=start_at.strftime('%H:%M:%S'), delay=delay))
-            self._executor.start(self._queue, start_at=start_at)
+            self._start_queue(start_at=start_at)
         except ValueError:
             self._log.append(t("log_scheduled_err"))
+
+    # ------------------------------------------------------------------
+    # CLI and MCP control bridge
+    # ------------------------------------------------------------------
+
+    def _handle_control_request(self, payload: dict) -> dict:
+        """Execute a remote command on the Tk thread and return JSON-safe data."""
+        if threading.current_thread() is self._ui_thread:
+            return self._execute_control_command(payload)
+
+        result: dict = {}
+        completed = threading.Event()
+
+        def run() -> None:
+            try:
+                result.update(self._execute_control_command(payload))
+            except Exception as exc:
+                result.update({"ok": False, "error": str(exc)})
+            finally:
+                completed.set()
+
+        try:
+            self.after(0, run)
+        except Exception as exc:
+            return {"ok": False, "error": f"UI is closing: {exc}"}
+        if not completed.wait(12):
+            return {"ok": False, "error": "UI did not respond in time"}
+        return result
+
+    def _execute_control_command(self, payload: dict) -> dict:
+        command = str(payload.get("command", "")).strip()
+        source = str(payload.get("source", "CLI"))
+        if command == "status":
+            self._log.append(t("log_remote_action", source=source, action="status"))
+            return {"ok": True, **self._control_status()}
+
+        try:
+            if command == "add":
+                if self._executor.running:
+                    raise ValueError("Cannot add to a running queue")
+                item = Item.from_dict(payload.get("item") or payload)
+                self._queue.append(item)
+                self._queue_panel.render(self._queue)
+                action_text = f"add [{item.label}]"
+                self._log.append(t("log_remote_action", source=source, action=action_text))
+                return {"ok": True, "item": item.to_dict(), **self._control_status()}
+
+            if command == "start":
+                delay_minutes = max(0, int(payload.get("delay_minutes", 0)))
+                if delay_minutes:
+                    start_at = datetime.now() + timedelta(minutes=delay_minutes)
+                    started = self._start_queue(start_at=start_at)
+                    if started:
+                        self._log.append(t("log_scheduled", time=start_at.strftime('%H:%M:%S'), delay=delay_minutes))
+                else:
+                    started = self._start_queue()
+                if not started:
+                    raise ValueError("Queue is empty or already running")
+                self._log.append(t("log_remote_action", source=source, action="start"))
+                return {"ok": True, **self._control_status()}
+
+            if command == "stop":
+                self._executor.stop()
+                self._log.append(t("log_remote_action", source=source, action="stop"))
+                return {"ok": True, **self._control_status()}
+
+            if command == "reset":
+                if self._executor.running:
+                    raise ValueError("Stop the running queue before resetting it")
+                for item in self._queue:
+                    item.reset()
+                self._queue_panel.render(self._queue)
+                self._queue_panel.set_status("")
+                self._log.append(t("log_remote_action", source=source, action="reset"))
+                return {"ok": True, **self._control_status()}
+
+            if command == "clear":
+                if self._executor.running:
+                    raise ValueError("Stop the running queue before clearing it")
+                self._queue.clear()
+                self._queue_panel.render(self._queue)
+                self._queue_panel.set_status("")
+                self._log.append(t("log_remote_action", source=source, action="clear"))
+                return {"ok": True, **self._control_status()}
+
+            if command == "power_get":
+                settings = PowerManager().read_settings()
+                self._log.append(t("log_remote_action", source=source, action="power status"))
+                return {"ok": True, "settings": self._power_settings_dict(settings)}
+
+            if command == "power_set":
+                settings = self._power_settings_from_dict(payload.get("settings"))
+                PowerManager().apply_settings(settings)
+                self._log.append(t("log_remote_action", source=source, action="power set"))
+                return {"ok": True, "settings": self._power_settings_dict(settings)}
+
+            raise ValueError(f"Unknown command: {command or '<missing>'}")
+        except Exception as exc:
+            self._log.append(t("log_remote_error", err=str(exc)))
+            return {"ok": False, "error": str(exc)}
+
+    def _control_status(self) -> dict:
+        items = []
+        for item in self._queue:
+            data = item.to_dict()
+            data.update({"status": item.status, "remaining": item.rem, "phase": item.phase})
+            items.append(data)
+        start_at = self._executor.scheduled_start_at
+        return {
+            "version": VERSION,
+            "running": self._executor.running,
+            "scheduled_start": start_at.isoformat() if start_at else None,
+            "items": items,
+        }
+
+    @staticmethod
+    def _power_settings_dict(settings: PowerSettings) -> dict:
+        return asdict(settings)
+
+    @staticmethod
+    def _power_settings_from_dict(data: object) -> PowerSettings:
+        if not isinstance(data, dict):
+            raise ValueError("settings must be an object")
+
+        def source(name: str) -> PowerSourceSettings:
+            raw = data.get(name)
+            if not isinstance(raw, dict):
+                raise ValueError(f"settings.{name} must be an object")
+            required = ("lid_action", "power_button_action", "display_timeout", "sleep_timeout")
+            missing = [key for key in required if key not in raw]
+            if missing:
+                raise ValueError(f"settings.{name} is missing: {', '.join(missing)}")
+            return PowerSourceSettings(
+                lid_action=str(raw["lid_action"]),
+                power_button_action=str(raw["power_button_action"]),
+                display_timeout=str(raw["display_timeout"]),
+                sleep_timeout=str(raw["sleep_timeout"]),
+            )
+
+        return PowerSettings(source("plugged_in"), source("on_battery"))
 
     # ------------------------------------------------------------------
     # Auto-update
@@ -534,6 +685,7 @@ class AppWindow(ctk.CTk):
     def _on_close(self) -> None:
         self._alive = False       # stop executor callbacks from posting to after()
         self._executor.stop()     # signal worker thread to exit
+        self._control_server.stop()
         self.withdraw()           # hide the window immediately (feels instant)
         # CustomTkinter spawns a non-daemon darkdetect thread that blocks
         # normal Python shutdown. os._exit(0) terminates the process directly,

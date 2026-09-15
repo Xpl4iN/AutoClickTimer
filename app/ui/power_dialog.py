@@ -9,6 +9,7 @@ import tkinter as tk
 from app.power_manager import (
     ACTION_VALUES,
     DISPLAY_TIMEOUTS,
+    SLEEP_TIMEOUTS,
     PowerManager,
     PowerSettings,
     PowerSettingsError,
@@ -44,8 +45,8 @@ class PowerSettingsDialog(ctk.CTkToplevel):
         self._source_frames: list[tuple[ctk.CTkLabel, ctk.CTkFrame]] = []
 
         self.title(t("power_title"))
-        self.geometry("760x650")
-        self.minsize(620, 560)
+        self.geometry("760x720")
+        self.minsize(620, 620)
         self.configure(fg_color=SURFACE)
         self.transient(parent)
         self.grab_set()
@@ -142,12 +143,14 @@ class PowerSettingsDialog(ctk.CTkToplevel):
             "lid_action": tk.StringVar(),
             "power_button_action": tk.StringVar(),
             "display_timeout": tk.StringVar(),
+            "sleep_timeout": tk.StringVar(),
         }
         self._vars[source] = values
 
         self._build_row(card, 1, "power_button_label", "power_button_action", values["power_button_action"])
         self._build_row(card, 2, "lid_label", "lid_action", values["lid_action"])
         self._build_row(card, 3, "display_timeout_label", "display_timeout", values["display_timeout"])
+        self._build_row(card, 4, "sleep_timeout_label", "sleep_timeout", values["sleep_timeout"])
 
     def _build_row(
         self,
@@ -180,6 +183,8 @@ class PowerSettingsDialog(ctk.CTkToplevel):
     def _display_values(self, setting_key: str) -> list[str]:
         if setting_key == "display_timeout":
             return [t(f"timeout_{key}") for key in DISPLAY_TIMEOUTS]
+        if setting_key == "sleep_timeout":
+            return [t(f"timeout_{key}") for key in SLEEP_TIMEOUTS]
         return [t(f"power_action_{key}") for key in ACTION_VALUES]
 
     def _load(self) -> None:
@@ -196,20 +201,22 @@ class PowerSettingsDialog(ctk.CTkToplevel):
             ("lid_action", values.lid_action),
             ("power_button_action", values.power_button_action),
             ("display_timeout", values.display_timeout),
+            ("sleep_timeout", values.sleep_timeout),
         ):
             self._vars[source][key].set(self._display_value(key, value))
 
     def _display_value(self, setting_key: str, value: str) -> str:
-        if setting_key == "display_timeout":
+        if setting_key in ("display_timeout", "sleep_timeout"):
             return t(f"timeout_{value}")
         return t(f"power_action_{value}")
 
     def _internal_value(self, setting_key: str, display_value: str) -> str:
-        if setting_key == "display_timeout":
-            for key in DISPLAY_TIMEOUTS:
+        if setting_key in ("display_timeout", "sleep_timeout"):
+            timeout_keys = DISPLAY_TIMEOUTS if setting_key == "display_timeout" else SLEEP_TIMEOUTS
+            for key in timeout_keys:
                 if any(display_value == strings.get(f"timeout_{key}") for strings in STRINGS.values()):
                     return key
-            return "15_min"
+            return "15_min" if setting_key == "display_timeout" else "30_min"
         for key in ACTION_VALUES:
             if any(display_value == strings.get(f"power_action_{key}") for strings in STRINGS.values()):
                 return key
@@ -238,6 +245,7 @@ class PowerSettingsDialog(ctk.CTkToplevel):
             lid_action=self._internal_value("lid_action", values["lid_action"].get()),
             power_button_action=self._internal_value("power_button_action", values["power_button_action"].get()),
             display_timeout=self._internal_value("display_timeout", values["display_timeout"].get()),
+            sleep_timeout=self._internal_value("sleep_timeout", values["sleep_timeout"].get()),
         )
 
     def retranslate(self, lang: str = "de") -> None:
@@ -250,6 +258,7 @@ class PowerSettingsDialog(ctk.CTkToplevel):
             self._vars[source]["lid_action"].set(self._display_value("lid_action", self._internal_value("lid_action", self._vars[source]["lid_action"].get())))
             self._vars[source]["power_button_action"].set(self._display_value("power_button_action", self._internal_value("power_button_action", self._vars[source]["power_button_action"].get())))
             self._vars[source]["display_timeout"].set(self._display_value("display_timeout", self._internal_value("display_timeout", self._vars[source]["display_timeout"].get())))
+            self._vars[source]["sleep_timeout"].set(self._display_value("sleep_timeout", self._internal_value("sleep_timeout", self._vars[source]["sleep_timeout"].get())))
         # Rebuilding the cards keeps combo-box choices in the new language.
         # Existing values remain in their StringVars and are restored above.
         for _, card in self._source_frames:
@@ -260,6 +269,7 @@ class PowerSettingsDialog(ctk.CTkToplevel):
             self._build_row(card, 1, "power_button_label", "power_button_action", self._vars[source]["power_button_action"])
             self._build_row(card, 2, "lid_label", "lid_action", self._vars[source]["lid_action"])
             self._build_row(card, 3, "display_timeout_label", "display_timeout", self._vars[source]["display_timeout"])
+            self._build_row(card, 4, "sleep_timeout_label", "sleep_timeout", self._vars[source]["sleep_timeout"])
         for index, (heading, _) in enumerate(self._source_frames):
             heading.configure(text=t("plugged_in" if index == 0 else "on_battery"))
 
